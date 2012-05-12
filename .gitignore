@@ -1,0 +1,14 @@
+.classpath
+.project
+.#*
+/pom.xml
+*jar
+*.jnilib
+/lib
+/bin
+/classes
+/native
+/target
+/.lein-failures
+/checkouts
+/.lein-deps-sum
