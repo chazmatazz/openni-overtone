@@ -4,10 +4,11 @@ Music for Unfolding Perception
 
 ## Usage
 
-FIXME: write
+* lein2 swank
+* Emacs
+ * M-x slime-connect
+ * C-c C-l quil.clj
 
 ## License
 
 Copyright (C) 2012 Charles Dietrich
-
-Distributed under the Eclipse Public License, the same as Clojure.
