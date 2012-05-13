@@ -102,8 +102,8 @@
          :center {:x 0, :y 0, :z 1500}}
         quadrant
         (+
-         (if (> (:x (:neck new-skeleton)) (:x (:center kinectspace))) 0 1)
-         (* 2 (if (> (:z (:neck new-skeleton)) (:z (:center kinectspace))) 0 1)))]
+         (if (> (:z (:neck new-skeleton)) (:z (:center kinectspace))) 0 1)
+         (* 2 (if (> (:x (:neck new-skeleton)) (:x (:center kinectspace))) 0 1)))]
     (let [head-freq-range (if (= quadrant 2) [100 30] [220 60])
           head-vol-max
           (condp = quadrant
@@ -115,13 +115,13 @@
           [
            head-freq
            (overtone/scale-range
-            (:x (:head new-skeleton))
-            (:x (:min kinectspace)) (:x (:max kinectspace))
+            (:y (:head new-skeleton))
+            (:y (:min kinectspace)) (:y (:max kinectspace))
             (first head-freq-range) (second head-freq-range))
            head-vol
            (overtone/scale-range
-            (math/abs (- (:y (:head new-skeleton)) (:y (:head old-skeleton))))
-            0 50
+            (math/abs (- (:x (:head new-skeleton)) (:x (:head old-skeleton))))
+            0 (* 0.02 (- (:x (:max kinectspace)) (:x (:min kinectspace))))
             0 head-vol-max)
            ]
         (let [r (- 1.0 head-vol-max)]
