@@ -69,72 +69,211 @@
   ; `bifocals/depth-height`, and then adjust the sketch size accordingly.
   :size [640 480])
 
-(overtone/definst head-sound [freq 440 vol 0] (* vol (overtone/sin-osc freq)))
 
-(overtone/definst br-sound [vol 0] (* vol (overtone/lf-saw 30)))
+(overtone/definst head-0 [freq 440 vol 0] (* vol (overtone/sin-osc freq)))
+(overtone/definst head-1 [freq 440 vol 0] (* vol (overtone/sin-osc freq)))
+(overtone/definst head-2 [freq 440 vol 0] (* vol (overtone/sin-osc freq)))
+(overtone/definst head-3 [freq 440 vol 0] (* vol (overtone/sin-osc freq)))
+(overtone/definst head-4 [freq 440 vol 0] (* vol (overtone/sin-osc freq)))
+(overtone/definst head-5 [freq 440 vol 0] (* vol (overtone/sin-osc freq)))
 
-(overtone/definst fr-sound [vol 0] (* vol (overtone/sin-osc 440)))
+(overtone/definst left-foot-0 [freq 440 vol 0] (* vol (overtone/sin-osc freq)))
+(overtone/definst left-foot-1 [freq 440 vol 0] (* vol (overtone/sin-osc freq)))
+(overtone/definst left-foot-2 [freq 440 vol 0] (* vol (overtone/sin-osc freq)))
+(overtone/definst left-foot-3 [freq 440 vol 0] (* vol (overtone/sin-osc freq)))
+(overtone/definst left-foot-4 [freq 440 vol 0] (* vol (overtone/sin-osc freq)))
+(overtone/definst left-foot-5 [freq 440 vol 0] (* vol (overtone/sin-osc freq)))
 
-(overtone/definst bl-sound
-  [vol 0]
-  (let [base-freq 60
-        part-vol (/ vol 3.0)]
-    (* part-vol (overtone/lf-tri base-freq))
-    (* part-vol (overtone/lf-tri (* base-freq (/ 2.0 3))))
-    (* part-vol (overtone/lf-tri (* base-freq 2)))))
+(overtone/definst left-hand-0 [freq 440 vol 0] (* vol (overtone/square freq)))
+(overtone/definst left-hand-1 [freq 440 vol 0] (* vol (overtone/square freq)))
+(overtone/definst left-hand-2 [freq 440 vol 0] (* vol (overtone/square freq)))
+(overtone/definst left-hand-3 [freq 440 vol 0] (* vol (overtone/square freq)))
+(overtone/definst left-hand-4 [freq 440 vol 0] (* vol (overtone/square freq)))
+(overtone/definst left-hand-5 [freq 440 vol 0] (* vol (overtone/square freq)))
 
-(overtone/definst fl-sound [vol 0] (* vol (overtone/sin-osc 220)))
+(overtone/definst br-0 [vol 0] (* vol (overtone/lf-saw 30)))
+(overtone/definst br-1 [vol 0] (* vol (overtone/lf-saw 30)))
+(overtone/definst br-2 [vol 0] (* vol (overtone/lf-saw 30)))
+(overtone/definst br-3 [vol 0] (* vol (overtone/lf-saw 30)))
+(overtone/definst br-4 [vol 0] (* vol (overtone/lf-saw 30)))
+(overtone/definst br-5 [vol 0] (* vol (overtone/lf-saw 30)))
+
+(overtone/definst fr-0 [vol 0] (* vol (overtone/sin-osc 440)))
+(overtone/definst fr-1 [vol 0] (* vol (overtone/sin-osc 440)))
+(overtone/definst fr-2 [vol 0] (* vol (overtone/sin-osc 440)))
+(overtone/definst fr-3 [vol 0] (* vol (overtone/sin-osc 440)))
+(overtone/definst fr-4 [vol 0] (* vol (overtone/sin-osc 440)))
+(overtone/definst fr-5 [vol 0] (* vol (overtone/sin-osc 440)))
+
+(overtone/definst bl-0   [vol 0]
+  (let [base-freq 60]
+    (* vol (overtone/lf-tri [base-freq (* base-freq 2) (* base-freq 3)]))))
+(overtone/definst bl-1   [vol 0]
+  (let [base-freq 60]
+    (* vol (overtone/lf-tri [base-freq (* base-freq 2) (* base-freq 3)]))))
+(overtone/definst bl-2   [vol 0]
+  (let [base-freq 60]
+    (* vol (overtone/lf-tri [base-freq (* base-freq 2) (* base-freq 3)]))))
+(overtone/definst bl-3   [vol 0]
+  (let [base-freq 60]
+    (* vol (overtone/lf-tri [base-freq (* base-freq 2) (* base-freq 3)]))))
+(overtone/definst bl-4   [vol 0]
+  (let [base-freq 60]
+    (* vol (overtone/lf-tri [base-freq (* base-freq 2) (* base-freq 3)]))))
+(overtone/definst bl-5   [vol 0]
+  (let [base-freq 60]
+    (* vol (overtone/lf-tri [base-freq (* base-freq 2) (* base-freq 3)]))))
+
+(overtone/definst fl-0 [vol 0] (* vol (overtone/sin-osc 220)))
+(overtone/definst fl-1 [vol 0] (* vol (overtone/sin-osc 220)))
+(overtone/definst fl-2 [vol 0] (* vol (overtone/sin-osc 220)))
+(overtone/definst fl-3 [vol 0] (* vol (overtone/sin-osc 220)))
+(overtone/definst fl-4 [vol 0] (* vol (overtone/sin-osc 220)))
+(overtone/definst fl-5 [vol 0] (* vol (overtone/sin-osc 220)))
+
+(defn get-head [uid] (condp = (mod uid 6)
+                       0 head-0
+                       1 head-1
+                       2 head-2
+                       3 head-3
+                       4 head-4
+                       5 head-5))
+
+(defn get-left-foot [uid] (condp = (mod uid 6)
+                       0 left-foot-0
+                       1 left-foot-1
+                       2 left-foot-2
+                       3 left-foot-3
+                       4 left-foot-4
+                       5 left-foot-5))
+
+(defn get-left-hand [uid] (condp = (mod uid 6)
+                       0 left-hand-0
+                       1 left-hand-1
+                       2 left-hand-2
+                       3 left-hand-3
+                       4 left-hand-4
+                       5 left-hand-5))
+
+(defn get-br [uid] (condp = (mod uid 6)
+                       0 br-0
+                       1 br-1
+                       2 br-2
+                       3 br-3
+                       4 br-4
+                       5 br-5))
+
+(defn get-fr [uid] (condp = (mod uid 6)
+                       0 fr-0
+                       1 fr-1
+                       2 fr-2
+                       3 fr-3
+                       4 fr-4
+                       5 fr-5))
+
+(defn get-bl [uid] (condp = (mod uid 6)
+                       0 bl-0
+                       1 bl-1
+                       2 bl-2
+                       3 bl-3
+                       4 bl-4
+                       5 bl-5))
+
+(defn get-fl [uid] (condp = (mod uid 6)
+                       0 fl-0
+                       1 fl-1
+                       2 fl-2
+                       3 fl-3
+                       4 fl-4
+                       5 fl-5))
 
 (defn start-sound []
-  (head-sound)
-  (br-sound)
-  (fr-sound)
-  (bl-sound)
-  (fl-sound))
+  (doseq [i (range 6)]
+         ((get-head i))
+         ((get-left-foot i))
+         ((get-left-hand i))
+         ((get-br i))
+         ((get-fr i))
+         ((get-bl i))
+         ((get-fl i))))
 
 (start-sound)
 
+(def kinectspace
+  {:min {:x -400, :y -800, :z 0},
+   :max {:x 400, :y 2000, :z 5000},
+   :center {:x 0, :y 0, :z 2500}})
+
+(defn get-quadrant [skeleton]
+  (+ (if (> (:z (:neck skeleton)) (:z (:center kinectspace))) 0 1)
+     (* 2 (if (> (:x (:neck skeleton)) (:x (:center kinectspace))) 0 1))))
+
 (defn control-sound
   [uid old-skeleton new-skeleton]
-  (let [kinectspace
-        {:min {:x -400, :y -400, :z 0},
-         :max {:x 400, :y 400, :z 5000},
-         :center {:x 0, :y 0, :z 1500}}
-        quadrant
-        (+
-         (if (> (:z (:neck new-skeleton)) (:z (:center kinectspace))) 0 1)
-         (* 2 (if (> (:x (:neck new-skeleton)) (:x (:center kinectspace))) 0 1)))]
-    (let [head-freq-range (if (= quadrant 2) [100 30] [220 60])
-          head-vol-max
-          (condp = quadrant
-            0 0.6
-            1 0.8
-            2 0.5
-            3 0.8)]
-      (let
-          [
-           head-freq
-           (overtone/scale-range
-            (:y (:head new-skeleton))
-            (:y (:min kinectspace)) (:y (:max kinectspace))
-            (first head-freq-range) (second head-freq-range))
-           head-vol
-           (overtone/scale-range
-            (math/abs (- (:x (:head new-skeleton)) (:x (:head old-skeleton))))
-            0 (* 0.02 (- (:x (:max kinectspace)) (:x (:min kinectspace))))
-            0 head-vol-max)
-           ]
-        (let [r (- 1.0 head-vol-max)]
-          (let [vol-vec (condp = quadrant
-                          0 [r 0 0 0]
-                          1 [0 r 0 0]
-                          2 [0 0 r 0]
-                          3 [0 0 0 r])]
-            (overtone/ctl head-sound :freq head-freq :vol head-vol)
-            (overtone/ctl br-sound :vol (first vol-vec))
-            (overtone/ctl fr-sound :vol (second vol-vec))
-            (overtone/ctl bl-sound :vol (nth vol-vec 2))
-            (overtone/ctl fl-sound :vol (nth vol-vec 3))))))))
+  (let
+      [old-quadrant (get-quadrant old-skeleton)
+       new-quadrant (get-quadrant new-skeleton)
+       head-freq-range
+       (if (= new-quadrant 2) ;bl
+         {:lower 660, :upper 440}
+         {:lower 600, :upper 200})
+       head-vol-min 0
+       head-vol-max
+       (condp = new-quadrant
+         0 0.2 ; br
+         1 0.2 ;fr
+         2 0.2 ; bl
+         3 0.2) ;fl
+       left-foot-vol-min 0
+       left-foot-vol-max
+       (condp = new-quadrant
+         0 0.2 ; br
+         1 0.2 ;fr
+         2 0.2 ; bl
+         3 0.2) ;fl
+       left-hand-vol-min 0
+       left-hand-vol-max
+       (condp = new-quadrant
+         0 0.4 ; br
+         1 0.4 ;fr
+         2 0.4 ; bl
+         3 0.4) ;fl
+       head-freq
+       (* 0.7 (- 1000 (:y (:head new-skeleton))))
+       head-vol
+       (/ (overtone/scale-range
+        (math/abs (- (:x (:head new-skeleton)) (:x (:head old-skeleton))))
+        0 (* 0.01 (- (:x (:max kinectspace)) (:x (:min kinectspace))))
+        head-vol-min head-vol-max) 6)
+       left-foot-freq
+       (* 0.7 (+ 440 (:y (:left-foot new-skeleton))))
+       left-foot-vol
+       (/ (overtone/scale-range
+        (math/abs (- (:x (:left-foot new-skeleton)) (:x (:left-foot old-skeleton))))
+        0 (* 0.01 (- (:x (:max kinectspace)) (:x (:min kinectspace))))
+        left-foot-vol-min left-foot-vol-max) 6)
+       left-hand-freq
+       (* 0.7 (+ 440 (:y (:left-hand new-skeleton))))
+       left-hand-vol
+       (/ (overtone/scale-range
+        (math/abs (- (:x (:left-hand new-skeleton)) (:x (:left-hand old-skeleton))))
+        0 (* 0.01 (- (:x (:max kinectspace)) (:x (:min kinectspace))))
+        left-hand-vol-min left-hand-vol-max) 6)
+       r (* 0 (/ (- 1.0 head-vol-max) 6))
+       r2 (* 0 0.7 r)
+       vol-vec (condp = new-quadrant
+                 0 [r 0 0 0] ;br
+                 1 [0 r2 0 0] ;fr
+                 2 [0 0 r2 0] ;bl
+                 3 [0 0 0 r2])
+       ]
+    (overtone/ctl (get-head uid) :freq head-freq :vol head-vol)
+    (overtone/ctl (get-left-foot uid) :freq left-foot-freq :vol left-foot-vol)
+    (overtone/ctl (get-left-hand uid) :freq left-hand-freq :vol left-hand-vol)
+    (overtone/ctl (get-br uid) :vol (first vol-vec))
+    (overtone/ctl (get-fr uid) :vol (second vol-vec))
+    (overtone/ctl (get-bl uid) :vol (nth vol-vec 2))
+    (overtone/ctl (get-fl uid) :vol (nth vol-vec 3))))
 
 (defn on-skeletons-change [the-key the-ref old-skeletons new-skeletons]
   (doseq
