@@ -1,14 +1,26 @@
-# unfolding-perception
+# openni-overtone
 
-Music for Unfolding Perception
+Demo of OpenNI with Overtone. Doesn't sound great, but it gets you started.
 
 ## Usage
 
-* lein2 swank
-* Emacs
- * M-x slime-connect
- * C-c C-l quil.clj
+* Setup the Kinect. Follow the instructions for SimpleOpenNI (http://code.google.com/p/simple-openni/wiki/Installation). 
+* Test it (http://code.google.com/p/simple-openni/) using Processing.
+* Install Leiningen 2 (https://github.com/technomancy/leiningen/wiki/Upgrading). I am using Leiningen 2 for OpenGL support in quil.
+* Clone this project
+* cd openni-overtone
+* lein2 deps
+* connect the Kinect
+* lein2 run -m openni-overtone.core
+
+You probably want to setup Emacs for overtone, see 
+(https://github.com/overtone/overtone/wiki/Overtone-in-Emacs). 
+However, for Leiningen 2, you want to run lein2 rather than lein. You can also 
+just edit ~/.lein/project.clj as in 
+(https://github.com/technomancy/leiningen/wiki/Upgrading).
 
 ## License
 
-Copyright (C) 2012 Charles Dietrich
+Copyright (C) 2012 Charles Dietrich.
+
+EPL
