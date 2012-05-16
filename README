@@ -13,11 +13,9 @@ Demo of OpenNI with Overtone. Doesn't sound great, but it gets you started.
 * connect the Kinect
 * lein2 run -m openni-overtone.core
 
-You probably want to setup Emacs for overtone, see 
-(https://github.com/overtone/overtone/wiki/Overtone-in-Emacs). 
-However, for Leiningen 2, you want to run lein2 rather than lein. You can also 
-just edit ~/.lein/project.clj as in 
-(https://github.com/technomancy/leiningen/wiki/Upgrading).
+You will probably have problems with JNIs on the classpath. You may need to fix your LD_LIBRARY_PATH (Linux) or DYLIB_LIBRARY_PATH (Mac).
+
+You probably want to setup Emacs for overtone, see (https://github.com/overtone/overtone/wiki/Overtone-in-Emacs). However, for Leiningen 2, you want to run lein2 rather than lein. You can also just edit ~/.lein/project.clj as in (https://github.com/technomancy/leiningen/wiki/Upgrading).
 
 ## License
 
