@@ -1,4 +1,4 @@
-(ns unfolding-perception
+(ns unfolding-perception.core
   (:require [bifocals.core :as bifocals] [quil.core :as quil] [overtone.live :as overtone] [clojure.math.numeric-tower :as math]))
 
 ;; An example of drawing all available skeletons, in 2D. Shows how to project
