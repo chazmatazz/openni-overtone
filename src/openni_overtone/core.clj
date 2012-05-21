@@ -125,28 +125,26 @@
 ;; instrument definitions
 ;; ----------------------
 
-(defmacro definst-a [inst-str]
-  '(overtone/definst (symbol inst-str)
-     [upstage-right-vol 0
-      downstage-right-vol 0
-      upstage-left-vol 0
-      downstage-left-vol 0
-      head-freq 440
-      head-vol 0
-      left-foot-freq 440
-      left-foot-vol 0
-      left-hand-freq 440
-      left-hand-vol 0]
-     (* upstage-right-vol (overtone/lf-saw 30))
-     (* downstage-right-vol (overtone/sin-osc 440))
+(defn definst-a [inst-str]
+  `(overtone/definst ~inst-str
+     [upstage-right-vol# 0
+      downstage-right-vol# 0
+      upstage-left-vol# 0
+      downstage-left-vol# 0
+      head-freq# 440
+      head-vol# 0
+      left-foot-freq# 440
+      left-foot-vol# 0
+      left-hand-freq# 440
+      left-hand-vol# 0]
+     (* upstage-right-vol# (overtone/lf-saw 30))
+     (* downstage-right-vol# (overtone/sin-osc 440))
      (let [base-freq 60]
-       (* upstage-left-vol (overtone/lf-tri [base-freq (* base-freq 2) (* base-freq 3)])))
-     (* downstage-left-vol (overtone/sin-osc 220))
-     (* 0.2 head-vol (overtone/sin-osc head-freq))
-     (* 0.2 left-foot-vol (overtone/sin-osc left-foot-freq))
-     (* 0.4 left-hand-vol (overtone/square left-hand-freq))))
-
-(definst-a "foo")
+       (* upstage-left-vol# (overtone/lf-tri [base-freq (* base-freq 2) (* base-freq 3)])))
+     (* downstage-left-vol# (overtone/sin-osc 220))
+     (* head-vol# (overtone/sin-osc head-freq))
+     (* left-foot-vol# (overtone/sin-osc left-foot-freq))
+     (* left-hand-vol# (overtone/square left-hand-freq))))
 
 (defn ctl-a [inst-a-str skeleton-hist num-uids]
   (when (ready skeleton-hist)
@@ -179,7 +177,7 @@
                     (/ (overtone/scale-range
                         (math/abs (:x (velocity skeleton-hist :head)))
                         0 (* 0.01 (stage-size :x))
-                        0 1)
+                        0 0.2)
                        num-uids)
                     :left-foot-freq
                     (* 0.7 (+ 440 (:y (most-recent skeleton-hist :left-foot)))) num-uids
@@ -187,14 +185,14 @@
                     (/ (overtone/scale-range
                         (math/abs (:x (velocity skeleton-hist :left-foot)))
                         0 (* 0.01 (stage-size :x))
-                        0 1) num-uids)
+                        0 0.2) num-uids)
                     :left-hand-freq
                     (* 0.7 (+ 440 (:y (most-recent skeleton-hist :left-hand))))
                     :left-hand-vol
                     (/ (overtone/scale-range
                         (math/abs (:x (velocity skeleton-hist :left-hand)))
                         0 (* 0.01 (stage-size :x))
-                        0 1) num-uids)))))
+                        0 0.4) num-uids)))))
 
 ;; skeletons vector
 ;; each entry in the vector is a map from uid to skeleton
@@ -233,6 +231,10 @@
 
 (defn get-inst-instance-str [inst-id uid]
   (str "inst-" inst-id "-" uid))
+
+(defn call [^String nm & args]
+    (when-let [fun (ns-resolve *ns* (symbol nm))]
+        (apply fun args)))
 
 (defn on-skeletons-change [the-key the-ref old-skeletons new-skeletons]
   (let [old-skeletons-hist @skeletons-hist
@@ -274,7 +276,7 @@
                 (do
                   (println "not contains new-keyword-uids")
                   (println "kill")
-                  (overtone/kill inst-instance-symbol))))
+                  (overtone/kill (symbol inst-instance-str)))))
             (let [inst-id "a"
                   definst-str
                   (str "definst-" inst-id)
@@ -284,13 +286,12 @@
                   (keyword-uid new-uid-skeleton-hists)]
               (println "not contains uid-inst")
               (println "inst-id" inst-id)
-              (println "definst-str" definst-str)
               (println "inst-instance-str" inst-instance-str)
               (println "skeleton-hist" skeleton-hist)
               (println "definst")
-              ((symbol definst-str) inst-instance-str)
-              (println "run")
-              (~(symbol (eval inst-instance-str)))
+              ((call definst-str) inst-instance-str)
+              (println "call")
+              ((call inst-instance-str))
               (println "assoc")
               (assoc! uid-inst keyword-uid inst-id))))))
     (println "swap!")
