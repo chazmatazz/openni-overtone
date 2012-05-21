@@ -305,23 +305,23 @@
           keyword-uids (set (concat old-keyword-uids new-keyword-uids))
           num-new-keyword-uids (count new-keyword-uids)]
       (doseq [keyword-uid keyword-uids]
-        (if (contains? @uid-inst keyword-uid)
+        (if (some #{keyword-uid} new-keyword-uids)
           (do
-            (if (some #{keyword-uid} keyword-uids)
-              (let [skeleton-hist (keyword-uid new-keyword-uid-skeleton-hists)]
-                (if (= "a" (keyword-uid @uid-inst))
-                  (ctl-a skeleton-hist num-new-keyword-uids)
-                  (ctl-b skeleton-hist num-new-keyword-uids)))
-              (do
-                (if (= "a" (keyword-uid @uid-inst))
-                  (overtone/kill inst-a)
-                  (overtone/kill inst-b))
-                (reset! uid-inst (dissoc @uid-inst keyword-uid)))))
-          (let [inst-id (if (odd? num-new-keyword-uids) "a" "b")]
-            (if (= "a" inst-id)
-              (inst-a)
-              (inst-b))
-            (reset! uid-inst (assoc @uid-inst keyword-uid inst-id)))))
+            (when-not (contains? @uid-inst keyword-uid)
+              (let [inst-id (if (odd? num-new-keyword-uids) "a" "b")]
+                (if (= "a" inst-id)
+                  (inst-a)
+                  (inst-b))
+                (reset! uid-inst (assoc @uid-inst keyword-uid inst-id))))
+            (let [skeleton-hist (keyword-uid new-keyword-uid-skeleton-hists)]
+              (if (= "a" (keyword-uid @uid-inst))
+                (ctl-a skeleton-hist num-new-keyword-uids)
+                (ctl-b skeleton-hist num-new-keyword-uids))))
+          (do
+            (if (= "a" (keyword-uid @uid-inst))
+              (overtone/kill inst-a)
+              (overtone/kill inst-b))
+            (reset! uid-inst (dissoc @uid-inst keyword-uid)))))
       (reset! keyword-skeletons-hist new-keyword-skeletons-hist)))
 
 (add-watch bifocals/skeletons :skeletons-watcher on-skeletons-change)
