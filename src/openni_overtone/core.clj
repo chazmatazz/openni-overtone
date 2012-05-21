@@ -125,7 +125,30 @@
 ;; instrument definitions
 ;; ----------------------
 
-(defn inst-a [skeleton-hist num_uids]
+(defmacro definst-a [inst-str]
+  '(overtone/definst (symbol inst-str)
+     [upstage-right-vol 0
+      downstage-right-vol 0
+      upstage-left-vol 0
+      downstage-left-vol 0
+      head-freq 440
+      head-vol 0
+      left-foot-freq 440
+      left-foot-vol 0
+      left-hand-freq 440
+      left-hand-vol 0]
+     (* upstage-right-vol (overtone/lf-saw 30))
+     (* downstage-right-vol (overtone/sin-osc 440))
+     (let [base-freq 60]
+       (* upstage-left-vol (overtone/lf-tri [base-freq (* base-freq 2) (* base-freq 3)])))
+     (* downstage-left-vol (overtone/sin-osc 220))
+     (* 0.2 head-vol (overtone/sin-osc head-freq))
+     (* 0.2 left-foot-vol (overtone/sin-osc left-foot-freq))
+     (* 0.4 left-hand-vol (overtone/square left-hand-freq))))
+
+(definst-a "foo")
+
+(defn ctl-a [inst-a-str skeleton-hist num-uids]
   (when (ready skeleton-hist)
     (let [quadrant-vol 0.2
           quadrant-scale-vol 0.7
@@ -138,39 +161,40 @@
                 ]
             (assoc vs
               (quadrant (most-recent skeleton-hist :neck)) 1))]
-      (* (:upstage-right quadrant-vols) quadrant-vol (overtone/lf-saw 30))
-      (* (:downstage-right quadrant-vols) quadrant-vol quadrant-scale-vol
-         (overtone/sin-osc 440))
-      (let [base-freq 60]
-        (* (:upstage-left quadrant-vols)
-           quadrant-vol quadrant-scale-vol
-           (overtone/lf-tri [base-freq (* base-freq 2) (* base-freq 3)])))
-      (* (:downstage-left quadrant-vols) quadrant-vol quadrant-scale-vol
-         (overtone/sin-osc 220))
-      (let [freq
-            (* 0.7 (- 1000 (:y (most-recent skeleton-hist :head))))
-            vol
-            (overtone/scale-range
-             (math/abs (:x (velocity skeleton-hist :head)))
-             0 (* 0.01 (stage-size :x))
-             0 1)]
-        (* 0.2 vol (overtone/sin-osc freq)))
-      (let [freq
-            (* 0.7 (+ 440 (:y (most-recent skeleton-hist :left-foot))))
-            vol
-            (overtone/scale-range
-             (math/abs (:x (velocity skeleton-hist :left-foot)))
-             0 (* 0.01 (stage-size :x))
-             0 1)]
-        (* 0.2 vol (overtone/sin-osc freq)))
-      (let [freq
-            (* 0.7 (+ 440 (:y (most-recent skeleton-hist :left-hand))))
-            vol
-            (overtone/scale-range
-             (math/abs (:x (velocity skeleton-hist :left-hand)))
-             0 (* 0.01 (stage-size :x))
-             0 1)]
-        (* 0.4 vol (overtone/square freq))))))
+      (overtone/ctl (symbol inst-a-str)
+                    :upstage-right-vol
+                    (/ (* (:upstage-right quadrant-vols) quadrant-vol) num-uids)
+                    :downstage-right-vol
+                    (/ (* (:downstage-right quadrant-vols) quadrant-vol quadrant-scale-vol)
+                       num-uids)
+                    :upstage-left-vol
+                    (/ (* (:upstage-left quadrant-vols) quadrant-vol quadrant-scale-vol)
+                       num-uids)
+                    :downstage-left-vol
+                    (/ (* (:downstage-left quadrant-vols) quadrant-vol quadrant-scale-vol)
+                       num-uids)
+                    :head-freq
+                    (* 0.7 (- 1000 (:y (most-recent skeleton-hist :head))))
+                    :head-vol
+                    (/ (overtone/scale-range
+                        (math/abs (:x (velocity skeleton-hist :head)))
+                        0 (* 0.01 (stage-size :x))
+                        0 1)
+                       num-uids)
+                    :left-foot-freq
+                    (* 0.7 (+ 440 (:y (most-recent skeleton-hist :left-foot)))) num-uids
+                    :left-foot-vol
+                    (/ (overtone/scale-range
+                        (math/abs (:x (velocity skeleton-hist :left-foot)))
+                        0 (* 0.01 (stage-size :x))
+                        0 1) num-uids)
+                    :left-hand-freq
+                    (* 0.7 (+ 440 (:y (most-recent skeleton-hist :left-hand))))
+                    :left-hand-vol
+                    (/ (overtone/scale-range
+                        (math/abs (:x (velocity skeleton-hist :left-hand)))
+                        0 (* 0.01 (stage-size :x))
+                        0 1) num-uids)))))
 
 ;; skeletons vector
 ;; each entry in the vector is a map from uid to skeleton
@@ -207,6 +231,9 @@
     (println "skeleton-pivot" result)
     result))
 
+(defn get-inst-instance-str [inst-id uid]
+  (str "inst-" inst-id "-" uid))
+
 (defn on-skeletons-change [the-key the-ref old-skeletons new-skeletons]
   (let [old-skeletons-hist @skeletons-hist
         new-skeletons-hist (cons new-skeletons (take 10 old-skeletons-hist))]
@@ -231,41 +258,41 @@
         (let [keyword-uid (keyword (str "uid-" uid))]
           (println "keyword-uid" keyword-uid)
           (if (contains? @uid-inst keyword-uid)
-            (let [inst-instance-fn (keyword-uid uid-inst)]
+            (let [inst-id (keyword-uid uid-inst)
+                  inst-instance-str (get-inst-instance-str inst-id uid)]
               (println "contains uid-inst")
-              (println "inst-instance-fn" inst-instance-fn)
+              (println "inst-id" inst-id)
+              (println "inst-instance-str" inst-instance-str)
               (if (contains? new-keyword-uids keyword-uid)
                 (let [skeleton-hist (keyword-uid new-uid-skeleton-hists)]
                   (println "contains new-keyword-uids")
                   (println "skeleton-hist" skeleton-hist)
                   (println "ctl")
-                  (overtone/ctl inst-instance-fn
+                  (ctl-a inst-instance-str
                                 :skeleton-hist skeleton-hist
                                 :num_uids num-new-uids))
                 (do
                   (println "not contains new-keyword-uids")
                   (println "kill")
-                  (overtone/kill inst-instance-fn))))
-            (let [inst-name "inst-a-"
-                  inst-fn (symbol (eval inst-name))
-                  inst-instance-symbol
-                  (symbol (eval (str inst-name uid)))
+                  (overtone/kill inst-instance-symbol))))
+            (let [inst-id "a"
+                  definst-str
+                  (str "definst-" inst-id)
+                  inst-instance-str
+                  (get-inst-instance-str inst-id uid)
                   skeleton-hist
                   (keyword-uid new-uid-skeleton-hists)]
               (println "not contains uid-inst")
-              (println "inst-name" inst-name)
-              (println "inst-fn" inst-fn)
-              (println "inst-instance-symbol" inst-instance-symbol)
+              (println "inst-id" inst-id)
+              (println "definst-str" definst-str)
+              (println "inst-instance-str" inst-instance-str)
               (println "skeleton-hist" skeleton-hist)
               (println "definst")
-              (overtone/definst inst-instance-symbol
-               [skeleton-hist skeleton-hist
-                num_uids num-new-uids]
-               inst-fn)
+              ((symbol definst-str) inst-instance-str)
               (println "run")
-              (inst-instance-symbol)
+              (~(symbol (eval inst-instance-str)))
               (println "assoc")
-              (assoc! uid-inst keyword-uid inst-instance-symbol))))))
+              (assoc! uid-inst keyword-uid inst-id))))))
     (println "swap!")
     (swap! skeletons-hist new-skeletons-hist)))
 
