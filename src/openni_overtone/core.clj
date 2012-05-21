@@ -112,19 +112,27 @@
 ;; skeleton history helpers
 ;; ------------------------
 
-(defn most-recent [skeleton-hist joint]
-  (joint (first skeleton-hist)))
+(defn deriv [new-v old-v]
+  (into {} (for [joint (keys bifocals.skeleton/joints)]
+             [joint (into {} (for [axis [:x :y :z]]
+                        [axis (-
+                               (axis (joint new-v))
+                               (axis (joint old-v)))]))])))
 
-(defn velocity [skeleton-hist joint]
-  (into {} (for [axis [:x :y :z]]
-             [axis (-
-                    (axis (joint (first skeleton-hist)))
-                    (axis (joint (second skeleton-hist))))])))
+(defn deriv1 [skeleton-hist n]
+  (deriv (nth skeleton-hist n) (nth skeleton-hist (+ n 1))))
+
+(defn deriv2 [skeleton-hist n]
+  (deriv (deriv1 skeleton-hist n) (deriv1 skeleton-hist (+ n 1))))
+
+(defn velocity [skeleton-hist]
+  (deriv1 skeleton-hist 0))
+
+(defn acceleration [skeleton-hist]
+  (deriv2 skeleton-hist 0))
 
 (defn ready [skeleton-hist]
-  ; (println (first skeleton-hist))
-  ; (println (second skeleton-hist))
-  (and (not= (first skeleton-hist) nil) (not= (second skeleton-hist) nil)))
+  (not (reduce (fn [acc v] (or acc v)) (map nil? skeleton-hist))))
 
 ;; ----------------------
 ;; instrument definitions
@@ -172,6 +180,7 @@
      (* left-foot-vol (overtone/sin-osc left-foot-freq))
      (* left-hand-vol (overtone/square left-hand-freq))))
 
+
 (defn ctl-a [skeleton-hist num-uids]
   (when (ready skeleton-hist)
     (let [quadrant-vol 0.2
@@ -198,25 +207,25 @@
                     (/ (* (:downstage-left quadrant-vols) quadrant-vol quadrant-scale-vol)
                        num-uids)
                     :head-freq
-                    (* 0.7 (- 1000 (:y (most-recent skeleton-hist :head))))
+                    (* 0.7 (- 1000 (:y (:head (first skeleton-hist)))))
                     :head-vol
                     (/ (overtone/scale-range
-                        (math/abs (:x (velocity skeleton-hist :head)))
+                        (math/abs (:x (:head (velocity skeleton-hist))))
                         0 (* 0.01 (stage-size :x))
                         0 0.2)
                        num-uids)
                     :left-foot-freq
-                    (* 0.7 (+ 440 (:y (most-recent skeleton-hist :left-foot))))
+                    (* 0.7 (+ 440 (:y (:left-foot (first skeleton-hist)))))
                     :left-foot-vol
                     (/ (overtone/scale-range
-                        (math/abs (:x (velocity skeleton-hist :left-foot)))
+                        (math/abs (:x (:left-foot (velocity skeleton-hist))))
                         0 (* 0.01 (stage-size :x))
                         0 0.2) num-uids)
                     :left-hand-freq
-                    (* 0.7 (+ 440 (:y (most-recent skeleton-hist :left-hand))))
+                    (* 0.7 (+ 440 (:y (:left-hand (first skeleton-hist)))))
                     :left-hand-vol
                     (/ (overtone/scale-range
-                        (math/abs (:x (velocity skeleton-hist :left-hand)))
+                        (math/abs (:x (:left-hand (velocity skeleton-hist))))
                         0 (* 0.01 (stage-size :x))
                         0 0.4) num-uids)))))
 
@@ -246,25 +255,25 @@
                     (/ (* (:downstage-left quadrant-vols) quadrant-vol quadrant-scale-vol)
                        num-uids)
                     :head-freq
-                    (* 0.7 (- 1000 (:y (most-recent skeleton-hist :head))))
+                    (* 0.7 (- 1000 (:y (:head (first skeleton-hist)))))
                     :head-vol
                     (/ (overtone/scale-range
-                        (math/abs (:x (velocity skeleton-hist :head)))
+                        (math/abs (:x (:head (velocity skeleton-hist))))
                         0 (* 0.01 (stage-size :x))
                         0 0.2)
                        num-uids)
                     :left-foot-freq
-                    (* 0.7 (+ 440 (:y (most-recent skeleton-hist :left-foot))))
+                    (* 0.7 (+ 440 (:y (:left-foot (first skeleton-hist)))))
                     :left-foot-vol
                     (/ (overtone/scale-range
-                        (math/abs (:x (velocity skeleton-hist :left-foot)))
+                        (math/abs (:x (:left-foot (velocity skeleton-hist))))
                         0 (* 0.01 (stage-size :x))
                         0 0.2) num-uids)
                     :left-hand-freq
-                    (* 0.7 (+ 440 (:y (most-recent skeleton-hist :left-hand))))
+                    (* 0.7 (+ 440 (:y (:left-hand (first skeleton-hist)))))
                     :left-hand-vol
                     (/ (overtone/scale-range
-                        (math/abs (:x (velocity skeleton-hist :left-hand)))
+                        (math/abs (:x (:left-hand (velocity skeleton-hist))))
                         0 (* 0.01 (stage-size :x))
                         0 0.4) num-uids)))))
 
