@@ -122,10 +122,10 @@
   (and (not= (first skeleton-hist) nil) (not= (second skeleton-hist) nil)))
 
 ;; ----------------------
-;; Instrument definitions
+;; instrument definitions
 ;; ----------------------
 
-(defn inst-a [skeleton-hist]
+(defn inst-a [skeleton-hist num_uids]
   (when (ready skeleton-hist)
     (let [quadrant-vol 0.2
           quadrant-scale-vol 0.7
@@ -172,12 +172,22 @@
              0 1)]
         (* 0.4 vol (overtone/square freq))))))
 
+;; skeletons vector
+;; each entry in the vector is a map from uid to skeleton
 (def skeletons-hist (atom []))
+;; map from keyword-uid to instrument
 (def uid-inst (atom {}))
 
+;; helper function
+;; given a skeletons-hist vector, extract the keys
+;; from each item in the vector, e.g. the keyword-uids
 (defn skeleton-keys [s-hist]
-  (keys (set (apply merge s-hist))))
+  (let [result (keys (apply merge s-hist))]
+    (println "skeleton-keys" result)
+  result))
 
+;; helper function
+;; given a map from keyword-uid to an empty
 (defn apply-keyword-uid-map [keyword-uid-map skeletons]
   (reduce
    (fn [acc skeleton]
@@ -190,12 +200,18 @@
   (let [keyword-uid-map
         (reduce
          (fn [v keyword-uid]
-           (assoc v keyword-uid nil)) {} keyword-uids)]
-    (map (partial apply-keyword-uid-map keyword-uid-map) s-hist)))
+           (assoc v keyword-uid nil)) {} keyword-uids)
+        result
+        (map (partial apply-keyword-uid-map keyword-uid-map) s-hist)]
+    (println "keyword-uid-map" keyword-uid-map)
+    (println "skeleton-pivot" result)
+    result))
 
 (defn on-skeletons-change [the-key the-ref old-skeletons new-skeletons]
   (let [old-skeletons-hist @skeletons-hist
         new-skeletons-hist (cons new-skeletons (take 10 old-skeletons-hist))]
+    (println "old-skeletons-hist" old-skeletons-hist)
+    (println "new-skeletons-hist" new-skeletons-hist)
     (let [old-keyword-uids (skeleton-keys old-skeletons-hist)
           new-keyword-uids (skeleton-keys new-skeletons-hist)
           old-uid-skeleton-hists
@@ -204,24 +220,53 @@
           (skeleton-pivot new-keyword-uids new-skeletons-hist)
           keyword-uids (set (concat old-keyword-uids new-keyword-uids))
           num-new-uids (count new-keyword-uids)]
+      (println "old-keyword-uids" old-keyword-uids)
+      (println "new-keyword-uids" new-keyword-uids)
+      (println "old-uid-skeleton-hists" old-uid-skeleton-hists)
+      (println "new-uid-skeleton-hists" new-uid-skeleton-hists)
+      (println "keyword-uids" keyword-uids)
+      (println "num-new-uids" num-new-uids)
       (doseq [uid keyword-uids]
-        (let [keyword-uid (keyword uid)]
+        (println "uid" uid)
+        (let [keyword-uid (keyword (str "uid-" uid))]
+          (println "keyword-uid" keyword-uid)
           (if (contains? @uid-inst keyword-uid)
             (let [inst-instance-fn (keyword-uid uid-inst)]
+              (println "contains uid-inst")
+              (println "inst-instance-fn" inst-instance-fn)
               (if (contains? new-keyword-uids keyword-uid)
-                (overtone/ctl inst-instance-fn :skeleton-hist
-                              (keyword-uid new-uid-skeleton-hists)
-                              :num_uids num-new-uids)
-                (overtone/kill inst-instance-fn)))
-            (let [inst-name "inst-a"
+                (let [skeleton-hist (keyword-uid new-uid-skeleton-hists)]
+                  (println "contains new-keyword-uids")
+                  (println "skeleton-hist" skeleton-hist)
+                  (println "ctl")
+                  (overtone/ctl inst-instance-fn
+                                :skeleton-hist skeleton-hist
+                                :num_uids num-new-uids))
+                (do
+                  (println "not contains new-keyword-uids")
+                  (println "kill")
+                  (overtone/kill inst-instance-fn))))
+            (let [inst-name "inst-a-"
                   inst-fn (symbol (eval inst-name))
                   inst-instance-symbol
-                  (symbol (eval (str inst-name uid)))]
-              ((overtone/definst inst-instance-symbol
-               [skeleton-hist (keyword-uid new-uid-skeleton-hists)
+                  (symbol (eval (str inst-name uid)))
+                  skeleton-hist
+                  (keyword-uid new-uid-skeleton-hists)]
+              (println "not contains uid-inst")
+              (println "inst-name" inst-name)
+              (println "inst-fn" inst-fn)
+              (println "inst-instance-symbol" inst-instance-symbol)
+              (println "skeleton-hist" skeleton-hist)
+              (println "definst")
+              (overtone/definst inst-instance-symbol
+               [skeleton-hist skeleton-hist
                 num_uids num-new-uids]
-               inst-fn))
-            (assoc! uid-inst keyword-uid inst-instance-symbol))))))
+               inst-fn)
+              (println "run")
+              (inst-instance-symbol)
+              (println "assoc")
+              (assoc! uid-inst keyword-uid inst-instance-symbol))))))
+    (println "swap!")
     (swap! skeletons-hist new-skeletons-hist)))
 
 (add-watch bifocals/skeletons :skeletons-watcher on-skeletons-change)
