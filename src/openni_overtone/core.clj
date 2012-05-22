@@ -102,9 +102,13 @@
 ;; is coordinate downstage?
 (defn downstage? [c] (halfspace? c :z))
 
-;; helper function: get the quadrant
+;; helper function: get the quadrant num
+(defn quadrant-num [c]
+  (+ (if (downstage? c) 0 1) (* 2 (if (stage-left? c) 0 1))))
+
+;; helper function: get the quadrant keyword
 (defn quadrant [c]
-  (condp = (+ (if (downstage? c) 0 1) (* 2 (if (stage-left? c) 0 1)))
+    (condp = (quadrant-num c)
     0 :upstage-right
     1 :downstage-right
     2 :upstage-left
@@ -163,28 +167,6 @@
      (* left-foot-vol (overtone/sin-osc left-foot-freq))
      (* left-hand-vol (overtone/square left-hand-freq))))
 
-(overtone/definst inst-b
-  [upstage-right-vol 0
-   downstage-right-vol 0
-   upstage-left-vol 0
-   downstage-left-vol 0
-   head-freq 440
-   head-vol 0
-   left-foot-freq 440
-   left-foot-vol 0
-   left-hand-freq 440
-   left-hand-vol 0]
-  (+ (* upstage-right-vol (overtone/lf-saw 30))
-     (* downstage-right-vol (overtone/sin-osc 440))
-     (let [base-freq 60]
-       (* upstage-left-vol
-          (overtone/lf-tri [base-freq (* base-freq 2) (* base-freq 3)])))
-     (* downstage-left-vol (overtone/sin-osc 220))
-     (* head-vol (overtone/sin-osc head-freq))
-     (* left-foot-vol (overtone/sin-osc left-foot-freq))
-     (* left-hand-vol (overtone/square left-hand-freq))))
-
-
 (defn ctl-a [skeleton-hist num-uids]
   (when (ready skeleton-hist)
     (let [quadrant-vol 0.2
@@ -233,53 +215,34 @@
                         0 (* 0.01 (stage-size :x))
                         0 0.4) num-uids)))))
 
+(def buf-b (overtone/buffer 8))
+(overtone/buffer-write! buf-b 0 (map #(+ 12 %) [50 50 54 50 57 50 45 49]))
+
+(overtone/definst inst-b [left-vol 0 right-vol 0]
+      (let [trig (overtone/impulse:kr 8)
+            indexes (overtone/dseq (range 8) overtone/INF)
+            freqs (overtone/dbufrd buf-b indexes)
+            note-gen (overtone/demand:kr trig 0 freqs)
+            src (overtone/sin-osc (overtone/midicps note-gen))]
+        (* [left-vol right-vol] src)))
+
 (defn ctl-b [skeleton-hist num-uids]
   (when (ready skeleton-hist)
-    (let [quadrant-vol 0.2
-          quadrant-scale-vol 0.7
-          quadrant-vols
-          (let [vs
-                {:upstage-right 0,
-                 :downstage-right 0,
-                 :upstage-left 0,
-                 :downstage-left 0}
-                ]
-            (assoc vs
-              (quadrant (:neck (first skeleton-hist))) 1))]
-      (overtone/ctl inst-b
-                    :upstage-right-vol
-                    (/ (* (:upstage-right quadrant-vols) quadrant-vol) num-uids)
-                    :downstage-right-vol
-                    (/ (* (:downstage-right quadrant-vols) quadrant-vol quadrant-scale-vol)
-                       num-uids)
-                    :upstage-left-vol
-                    (/ (* (:upstage-left quadrant-vols) quadrant-vol quadrant-scale-vol)
-                       num-uids)
-                    :downstage-left-vol
-                    (/ (* (:downstage-left quadrant-vols) quadrant-vol quadrant-scale-vol)
-                       num-uids)
-                    :head-freq
-                    (* 0.7 (- 1000 (:y (:head (first skeleton-hist)))))
-                    :head-vol
-                    (/ (overtone/scale-range
-                        (math/abs (:x (:head (velocity skeleton-hist))))
-                        0 (* 0.01 (stage-size :x))
-                        0 0.2)
-                       num-uids)
-                    :left-foot-freq
-                    (* 0.7 (+ 440 (:y (:left-foot (first skeleton-hist)))))
-                    :left-foot-vol
-                    (/ (overtone/scale-range
-                        (math/abs (:x (:left-foot (velocity skeleton-hist))))
-                        0 (* 0.01 (stage-size :x))
-                        0 0.2) num-uids)
-                    :left-hand-freq
-                    (* 0.7 (+ 440 (:y (:left-hand (first skeleton-hist)))))
-                    :left-hand-vol
-                    (/ (overtone/scale-range
-                        (math/abs (:x (:left-hand (velocity skeleton-hist))))
-                        0 (* 0.01 (stage-size :x))
-                        0 0.4) num-uids)))))
+    (overtone/buffer-set! buf-b
+                 (quadrant-num (:head (first skeleton-hist)))
+                 (math/floor (overtone/scale-range
+                         (:x (:left-foot (first skeleton-hist)))
+                         (:x (:min stage)) (:x (:max stage))
+                         40 80)))
+    (overtone/ctl inst-b
+                  :left-vol (overtone/scale-range
+                             (:y (:left-hand (first skeleton-hist)))
+                             (:y (:min stage)) (:y (:max stage))
+                             0 (/ 1 num-uids))
+                  :right-vol (overtone/scale-range
+                              (:z (:left-hand (first skeleton-hist)))
+                              (:z (:min stage)) (:z (:max stage))
+                              0 (/ 1 num-uids)))))
 
 ;; skeletons vector
 ;; each entry in the vector is a map from uid to skeleton
