@@ -74,6 +74,8 @@
 
 ;; Sound code
 
+(def hist-size 10)
+
 ;; ---------
 ;; quadrants
 ;; ---------
@@ -132,7 +134,9 @@
   (deriv2 skeleton-hist 0))
 
 (defn ready [skeleton-hist]
-  (not (reduce (fn [acc v] (or acc v)) (map nil? skeleton-hist))))
+  (and
+   (>= (count skeleton-hist) hist-size)
+   (not (reduce (fn [acc v] (or acc v)) false (map nil? skeleton-hist)))))
 
 ;; ----------------------
 ;; instrument definitions
@@ -193,7 +197,7 @@
                  :downstage-left 0}
                 ]
             (assoc vs
-              (quadrant (most-recent skeleton-hist :neck)) 1))]
+              (quadrant (:neck (first skeleton-hist))) 1))]
       (overtone/ctl inst-a
                     :upstage-right-vol
                     (/ (* (:upstage-right quadrant-vols) quadrant-vol) num-uids)
@@ -241,7 +245,7 @@
                  :downstage-left 0}
                 ]
             (assoc vs
-              (quadrant (most-recent skeleton-hist :neck)) 1))]
+              (quadrant (:neck (first skeleton-hist))) 1))]
       (overtone/ctl inst-b
                     :upstage-right-vol
                     (/ (* (:upstage-right quadrant-vols) quadrant-vol) num-uids)
@@ -302,35 +306,36 @@
                         (get keyword-skels keyword-uid nil)))])))
 
 (defn on-skeletons-change [the-key the-ref old-skeletons new-skeletons]
-      (let [old-keyword-skeletons-hist @keyword-skeletons-hist
-          new-keyword-skeletons-hist
-          (cons (keywordize new-skeletons) (take 10 old-keyword-skeletons-hist))
-          old-keyword-uids (skeleton-keys old-keyword-skeletons-hist)
-          new-keyword-uids (skeleton-keys new-keyword-skeletons-hist)
-          old-keyword-uid-skeleton-hists
-          (skeleton-pivot old-keyword-uids old-keyword-skeletons-hist)
-          new-keyword-uid-skeleton-hists
-          (skeleton-pivot new-keyword-uids new-keyword-skeletons-hist)
-          keyword-uids (set (concat old-keyword-uids new-keyword-uids))
-          num-new-keyword-uids (count new-keyword-uids)]
-      (doseq [keyword-uid keyword-uids]
-        (if (some #{keyword-uid} new-keyword-uids)
-          (do
-            (when-not (contains? @uid-inst keyword-uid)
-              (let [inst-id (if (odd? num-new-keyword-uids) "a" "b")]
-                (if (= "a" inst-id)
-                  (inst-a)
-                  (inst-b))
-                (reset! uid-inst (assoc @uid-inst keyword-uid inst-id))))
-            (let [skeleton-hist (keyword-uid new-keyword-uid-skeleton-hists)]
-              (if (= "a" (keyword-uid @uid-inst))
-                (ctl-a skeleton-hist num-new-keyword-uids)
-                (ctl-b skeleton-hist num-new-keyword-uids))))
-          (do
+  (let [old-keyword-skeletons-hist @keyword-skeletons-hist
+        new-keyword-skeletons-hist
+        (cons (keywordize new-skeletons)
+              (take (- hist-size 1) old-keyword-skeletons-hist))
+        old-keyword-uids (skeleton-keys old-keyword-skeletons-hist)
+        new-keyword-uids (skeleton-keys new-keyword-skeletons-hist)
+        old-keyword-uid-skeleton-hists
+        (skeleton-pivot old-keyword-uids old-keyword-skeletons-hist)
+        new-keyword-uid-skeleton-hists
+        (skeleton-pivot new-keyword-uids new-keyword-skeletons-hist)
+        keyword-uids (set (concat old-keyword-uids new-keyword-uids))
+        num-new-keyword-uids (count new-keyword-uids)]
+    (doseq [keyword-uid keyword-uids]
+      (if (some #{keyword-uid} new-keyword-uids)
+        (do
+          (when-not (contains? @uid-inst keyword-uid)
+            (let [inst-id (if (odd? num-new-keyword-uids) "a" "b")]
+              (if (= "a" inst-id)
+                (inst-a)
+                (inst-b))
+              (reset! uid-inst (assoc @uid-inst keyword-uid inst-id))))
+          (let [skeleton-hist (keyword-uid new-keyword-uid-skeleton-hists)]
             (if (= "a" (keyword-uid @uid-inst))
-              (overtone/kill inst-a)
-              (overtone/kill inst-b))
-            (reset! uid-inst (dissoc @uid-inst keyword-uid)))))
-      (reset! keyword-skeletons-hist new-keyword-skeletons-hist)))
+              (ctl-a skeleton-hist num-new-keyword-uids)
+              (ctl-b skeleton-hist num-new-keyword-uids))))
+        (do
+          (if (= "a" (keyword-uid @uid-inst))
+            (overtone/kill inst-a)
+            (overtone/kill inst-b))
+          (reset! uid-inst (dissoc @uid-inst keyword-uid)))))
+    (reset! keyword-skeletons-hist new-keyword-skeletons-hist)))
 
 (add-watch bifocals/skeletons :skeletons-watcher on-skeletons-change)
