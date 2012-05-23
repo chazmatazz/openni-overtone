@@ -5,4 +5,5 @@
                  [overtone "0.6.0"]
                  [quil "1.4.1"]
                  [bifocals "0.0.1"]]
-  :description "Music for Unfolding Perception")
+  :description "Music for Unfolding Perception"
+  :warn-on-reflection true)
