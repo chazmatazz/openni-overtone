@@ -304,4 +304,4 @@
             (swap! uid-inst dissoc keyword-uid)))))
     (reset! keyword-skeletons-hist new-keyword-skeletons-hist)))
 
-(add-watch bifocals/skeletons :skeletons-watcher on-skeletons-change)0
+(add-watch bifocals/skeletons :skeletons-watcher on-skeletons-change)
