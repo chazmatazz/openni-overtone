@@ -167,7 +167,7 @@
      (* left-foot-vol (overtone/sin-osc left-foot-freq))
      (* left-hand-vol (overtone/square left-hand-freq))))
 
-(defn ctl-a [skeleton-hist num-uids]
+(defn ctl-a [inst-id skeleton-hist num-uids]
   (when (ready skeleton-hist)
     (let [quadrant-vol 0.2
           quadrant-scale-vol 0.7
@@ -180,7 +180,7 @@
                 ]
             (assoc vs
               (quadrant (:neck (first skeleton-hist))) 1))]
-      (overtone/ctl inst-a
+      (overtone/ctl inst-id
                     :upstage-right-vol
                     (/ (* (:upstage-right quadrant-vols) quadrant-vol) num-uids)
                     :downstage-right-vol
@@ -215,34 +215,39 @@
                         0 (* 0.01 (stage-size :x))
                         0 0.4) num-uids)))))
 
-(def buf-b (overtone/buffer 8))
-(overtone/buffer-write! buf-b 0 (map #(+ 12 %) [50 50 54 50 57 50 45 49]))
+(def buf-b-size 36)
+(def buf-b (overtone/buffer buf-b-size))
+(overtone/buffer-write! buf-b 0 (map #(+ 12 %) [50 50 54 50 57 50 45 49 50 50 54 50 57 50 45 49 50 50 54 50 57 50 45 49 50 50 54 50 57 50 45 49 50 50 54 50 57 50 45 49 50 50 50 50]))
 
-(overtone/definst inst-b [left-vol 0 right-vol 0]
-      (let [trig (overtone/impulse:kr 8)
+(overtone/definst inst-b [rate 20 left-vol 0 right-vol 0]
+      (let [trig (overtone/impulse:kr rate)
             indexes (overtone/dseq (range 8) overtone/INF)
             freqs (overtone/dbufrd buf-b indexes)
             note-gen (overtone/demand:kr trig 0 freqs)
             src (overtone/sin-osc (overtone/midicps note-gen))]
         (* [left-vol right-vol] src)))
 
-(defn ctl-b [skeleton-hist num-uids]
+(defn ctl-b [inst-id skeleton-hist num-uids]
   (when (ready skeleton-hist)
     (overtone/buffer-set! buf-b
-                 (quadrant-num (:head (first skeleton-hist)))
+                          (int (overtone/scale-range
+                                  (:x (:head (first skeleton-hist)))
+                                  (:x (:min stage)) (:x (:max stage))
+                                  0 (- buf-b-size 1)))
                  (math/floor (overtone/scale-range
-                         (:x (:left-foot (first skeleton-hist)))
+                         (:x (:right-foot (first skeleton-hist)))
                          (:x (:min stage)) (:x (:max stage))
                          40 80)))
-    (overtone/ctl inst-b
-                  :left-vol (overtone/scale-range
+    (overtone/ctl inst-id
+                  :rate 8
+                  :left-vol (* 0 (overtone/scale-range
                              (:y (:left-hand (first skeleton-hist)))
                              (:y (:min stage)) (:y (:max stage))
-                             0 (/ 1 num-uids))
-                  :right-vol (overtone/scale-range
-                              (:z (:left-hand (first skeleton-hist)))
+                             0 (/ 1 num-uids)))
+                  :right-vol (* 0 (overtone/scale-range
+                              (:z (:right-hand (first skeleton-hist)))
                               (:z (:min stage)) (:z (:max stage))
-                              0 (/ 1 num-uids)))))
+                              0 (/ 1 num-uids))))))
 
 ;; skeletons vector
 ;; each entry in the vector is a map from uid to skeleton
@@ -286,19 +291,17 @@
         (do
           (when-not (contains? @uid-inst keyword-uid)
             (let [inst-id (if (odd? num-new-keyword-uids) "a" "b")]
-              (if (= "a" inst-id)
-                (inst-a)
-                (inst-b))
-              (reset! uid-inst (assoc @uid-inst keyword-uid inst-id))))
-          (let [skeleton-hist (keyword-uid new-keyword-uid-skeleton-hists)]
-            (if (= "a" (keyword-uid @uid-inst))
-              (ctl-a skeleton-hist num-new-keyword-uids)
-              (ctl-b skeleton-hist num-new-keyword-uids))))
-        (do
-          (if (= "a" (keyword-uid @uid-inst))
-            (overtone/kill inst-a)
-            (overtone/kill inst-b))
-          (reset! uid-inst (dissoc @uid-inst keyword-uid)))))
+              (swap! uid-inst assoc keyword-uid
+                      [inst-id (if (= "a" inst-id) (inst-a) (inst-a))])))
+          (let [skeleton-hist (keyword-uid new-keyword-uid-skeleton-hists)
+                v (keyword-uid @uid-inst)]
+            (if (= "a" (first v))
+              (ctl-a (second v) skeleton-hist num-new-keyword-uids)
+              (ctl-a (second v) skeleton-hist num-new-keyword-uids))))
+        (let [v (keyword-uid @uid-inst)]
+          (when-not (nil? v)
+            (overtone/kill (second v))
+            (swap! uid-inst dissoc keyword-uid)))))
     (reset! keyword-skeletons-hist new-keyword-skeletons-hist)))
 
-(add-watch bifocals/skeletons :skeletons-watcher on-skeletons-change)
+(add-watch bifocals/skeletons :skeletons-watcher on-skeletons-change)0
