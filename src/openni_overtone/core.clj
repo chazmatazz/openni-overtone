@@ -13,11 +13,8 @@
    [:left-hip :left-knee] [:right-hip :right-knee]
    [:left-knee :left-foot] [:right-knee :right-foot]])
 
-(def colormap
-  {:a {:r 20, :g 120, :b 180},
-   :b {:r 255, :g 0, :b 0}})
 
-(def hist-size 100)
+(def hist-size 2)
 
 ;; skeletons vector
 ;; each entry in the vector is a map from uid to skeleton
@@ -49,51 +46,6 @@
 
 ;; map from keyword-uid to instrument
 (def uid-inst (atom {}))
-
-(defn setup []
-  (quil/smooth)
-  ;; This function connects to the kinect. You must call it first. Otherwise,
-  ;; there will be NPEs.
-  (bifocals/setup)
-  (quil/frame-rate 30))
-
-(defn draw-line
-  [p1 p2]
-  (quil/line (:x p1) (:y p1) (:x p2) (:y p2)))
-
-(defn draw []
-  (quil/background 0)
-  ;; You must call this in the draw function. Otherwise, your depth image will be
-  ;; all black, and user/skeleton tracking will not work.
-  (bifocals/tick)
-  (quil/image (bifocals/depth-image) 0 0)
-
-  (let [skeletons-uid-hist
-        (skeleton-pivot
-         (skeleton-keys @keyword-skeletons-hist) @keyword-skeletons-hist)]
-    (doseq [[keyword-uid skel-hist] skeletons-uid-hist]
-      (when (ready skel-hist)
-        (quil/stroke-weight 3)
-        (dotimes [i 10]
-          (let [project-skeleton
-                (bifocals/project-skeleton (nth skel-hist i))]
-            (if (contains? @uid-inst keyword-uid)
-              (let [color ((first (keyword-uid @uid-inst)) colormap)]
-                (quil/stroke (:r color) (:g color) (:b color)
-                             (* (/ 255 hist-size) (- hist-size i)))))
-            (doseq [joint-pair joint-pairs]
-              (draw-line
-               ((first joint-pair) project-skeleton)
-               ((second joint-pair) project-skeleton)))))))))
-
-(quil/defsketch kinect
-  :title "Unfolding Perception"
-  :setup setup
-  :draw draw
-  ; If your depth image seems truncated, or the window is much larger than it,
-  ; check its dimensions by calling `bifocals/depth-width` and
-  ; `bifocals/depth-height`, and then adjust the sketch size accordingly.
-  :size [640 480])
 
 ;; Sound code
 
@@ -263,6 +215,7 @@
                      0 (* 0.01 (stage-size :x))
                      0 (/ 0.4 num-uids))))))
 
+
 (def buf-b-size 8)
 (def buf-b (overtone/buffer buf-b-size))
 (overtone/buffer-write! buf-b 0 (map #(+ 12 %) [50 50 54 50 57 50 45 49]))
@@ -277,25 +230,202 @@
 
 (defn ctl-b [inst-id skeleton-hist num-uids]
   (when (ready skeleton-hist)
-    (overtone/buffer-set! buf-b
-                          (int (overtone/scale-range
-                                  (:x (:head (first skeleton-hist)))
-                                  (:x (:min stage)) (:x (:max stage))
-                                  0 (- buf-b-size 1)))
-                 (int (overtone/scale-range
-                         (:x (:right-foot (first skeleton-hist)))
-                         (:x (:min stage)) (:x (:max stage))
-                         40 80)))
     (overtone/ctl inst-id
-                  :rate 8
+                  :rate (* 0 (overtone/scale-range
+                             (:y (:head (first (velocity skeleton-hist))))
+                             (:y (:min stage)) (:y (:max stage))
+                             0 (/ 1.0 num-uids)))
                   :left-vol (* 0 (overtone/scale-range
                              (:y (:left-hand (first skeleton-hist)))
                              (:y (:min stage)) (:y (:max stage))
-                             0 (/ 1 num-uids)))
+                             0 (/ 1.0 num-uids)))
                   :right-vol (* 0 (overtone/scale-range
                               (:z (:right-hand (first skeleton-hist)))
                               (:z (:min stage)) (:z (:max stage))
-                              0 (/ 1 num-uids))))))
+                              0 (/ 1.0 num-uids))))))
+
+(overtone/definst inst-c
+  [head-freq 440
+   head-vol 0
+   right-hand-freq 440
+   right-hand-vol 0
+   left-hand-freq 440
+   left-hand-vol 0]
+  (+ (* head-vol (overtone/sin-osc head-freq))
+     (* right-hand-vol (overtone/sin-osc right-hand-freq))
+     (* left-hand-vol (overtone/square left-hand-freq))))
+
+(defn ctl-c [inst-id skeleton-hist num-uids]
+  (when (ready skeleton-hist)
+    (overtone/ctl inst-id
+                    :head-freq
+                    (* 0.7 (- 1000 (:y (:head (first skeleton-hist)))))
+                    :head-vol
+                    (overtone/scale-range
+                     (math/abs (:x (:head (first (velocity skeleton-hist)))))
+                     0 (* 0.01 (stage-size :x))
+                     0 (/ 0.2 num-uids))
+                    :right-hand-freq
+                    (* 0.7 (+ 440 (:y (:right-hand (first skeleton-hist)))))
+                    :right-hand-vol
+                    (overtone/scale-range
+                     (math/abs (:x (:right-hand
+                                    (first (velocity skeleton-hist)))))
+                     0 (* 0.01 (stage-size :x))
+                     0 (/ 0.2 num-uids))
+                    :left-hand-freq
+                    (* 0.7 (+ 440 (:y (:left-hand (first skeleton-hist)))))
+                    :left-hand-vol
+                    (overtone/scale-range
+                     (math/abs (:x (:left-hand
+                                    (first (velocity skeleton-hist)))))
+                     0 (* 0.01 (stage-size :x))
+                     0 (/ 0.4 num-uids)))))
+
+(overtone/definst inst-d
+  [head-freq 440
+   head-vol 0
+   right-foot-freq 440
+   right-foot-vol 0
+   left-foot-freq 440
+   left-foot-vol 0
+   right-hand-freq 440
+   right-hand-vol 0
+   left-hand-freq 440
+   left-hand-vol 0]
+  (+ (* head-vol (overtone/sin-osc head-freq))
+     (* right-foot-vol (overtone/sin-osc right-foot-freq))
+     (* left-foot-vol (overtone/sin-osc left-foot-freq))
+     (* right-hand-vol (overtone/square right-hand-freq))
+     (* left-hand-vol (overtone/square left-hand-freq))))
+
+(defn ctl-d [inst-id skeleton-hist num-uids]
+  (when (ready skeleton-hist)
+      (overtone/ctl inst-id
+                    :head-freq
+                    (* 0.7 (- 1000 (:y (:head (first skeleton-hist)))))
+                    :head-vol
+                    (overtone/scale-range
+                     (math/abs (:x (:head (first (velocity skeleton-hist)))))
+                     0 (* 0.01 (stage-size :x))
+                     0 (/ 0.2 num-uids))
+                    :right-foot-freq
+                    (* 0.7 (+ 1500 (:y (:right-foot (first skeleton-hist)))))
+                    :right-foot-vol
+                    (overtone/scale-range
+                     (math/abs (:x (:right-foot
+                                    (first (velocity skeleton-hist)))))
+                     0 (* 0.02 (stage-size :x))
+                     0 (/ 0.2 num-uids))
+                    :left-foot-freq
+                    (* 0.7 (+ 1500 (:y (:left-foot (first skeleton-hist)))))
+                    :left-foot-vol
+                    (overtone/scale-range
+                     (math/abs (:x (:left-foot
+                                    (first (velocity skeleton-hist)))))
+                     0 (* 0.02 (stage-size :x))
+                     0 (/ 0.2 num-uids))
+                    :right-hand-freq
+                    (* 0.7 (+ 440 (:y (:right-hand (first skeleton-hist)))))
+                    :right-hand-vol
+                    (overtone/scale-range
+                     (math/abs (:x (:right-hand
+                                    (first (velocity skeleton-hist)))))
+                     0 (* 0.01 (stage-size :x))
+                     0 (/ 0.2 num-uids))
+                    :left-hand-freq
+                    (* 0.7 (+ 440 (:y (:left-hand (first skeleton-hist)))))
+                    :left-hand-vol
+                    (overtone/scale-range
+                     (math/abs (:x (:left-hand
+                                    (first (velocity skeleton-hist)))))
+                     0 (* 0.01 (stage-size :x))
+                     0 (/ 0.2 num-uids)))))
+
+(overtone/definst inst-e
+  [right-foot-freq 440
+   right-foot-vol 0
+   left-foot-freq 440
+   left-foot-vol 0]
+  (+ (* right-foot-vol (overtone/sin-osc right-foot-freq))
+     (* left-foot-vol (overtone/sin-osc left-foot-freq))))
+
+(defn ctl-e [inst-id skeleton-hist num-uids]
+  (when (ready skeleton-hist)
+      (overtone/ctl inst-id
+                    :right-foot-freq
+                    (overtone/scale-range
+                     (math/abs (- (:y (:right-foot (first skeleton-hist)))
+                                      (:y (:torso (first skeleton-hist)))))
+                     0 100
+                     440 880)
+                    :right-foot-vol
+                    (overtone/scale-range
+                     (math/abs (:x (:right-foot
+                                    (first (velocity skeleton-hist)))))
+                     0 (* 0.02 (stage-size :x))
+                     0 (/ 0.5 num-uids))
+                    :left-foot-freq
+                    (* 0.7 (+ 1000 (- (:y (:left-foot (first skeleton-hist)))
+                                      (:y (:torso (first skeleton-hist))))))
+                    :left-foot-vol
+                    (overtone/scale-range
+                     (math/abs (:x (:left-foot
+                                    (first (velocity skeleton-hist)))))
+                     0 (* 0.02 (stage-size :x))
+                     0 (/ 0.5 num-uids)))))
+
+(def inst-map
+  {:a {:inst inst-a, :color {:r 20, :g 120, :b 180}},
+   :b {:inst inst-b, :color {:r 255, :g 0, :b 0}},
+   :c {:inst inst-c, :color {:r 0, :g 255, :b 0}},
+   :d {:inst inst-d, :color {:r 0, :g 255, :b 255}},
+   :e {:inst inst-e, :color {:r 255, :g 0, :b 255}}})
+
+(defn setup []
+  (quil/smooth)
+  ;; This function connects to the kinect. You must call it first. Otherwise,
+  ;; there will be NPEs.
+  (bifocals/setup)
+  (quil/frame-rate 30))
+
+(defn draw-line
+  [p1 p2]
+  (quil/line (:x p1) (:y p1) (:x p2) (:y p2)))
+
+(defn draw []
+  (quil/background 0)
+  ;; You must call this in the draw function. Otherwise, your depth image will be
+  ;; all black, and user/skeleton tracking will not work.
+  (bifocals/tick)
+  (quil/image (bifocals/depth-image) 0 0)
+
+  (let [skeletons-uid-hist
+        (skeleton-pivot
+         (skeleton-keys @keyword-skeletons-hist) @keyword-skeletons-hist)]
+    (doseq [[keyword-uid skel-hist] skeletons-uid-hist]
+      (when (ready skel-hist)
+        (quil/stroke-weight 3)
+        (dotimes [i 1]
+          (let [project-skeleton
+                (bifocals/project-skeleton (nth skel-hist i))]
+            (if (contains? @uid-inst keyword-uid)
+              (let [color (:color ((first (keyword-uid @uid-inst)) inst-map))]
+                (quil/stroke (:r color) (:g color) (:b color)
+                             (* (/ 255 hist-size) (- hist-size i)))))
+            (doseq [joint-pair joint-pairs]
+              (draw-line
+               ((first joint-pair) project-skeleton)
+               ((second joint-pair) project-skeleton)))))))))
+
+(quil/defsketch kinect
+  :title "Unfolding Perception"
+  :setup setup
+  :draw draw
+  ; If your depth image seems truncated, or the window is much larger than it,
+  ; check its dimensions by calling `bifocals/depth-width` and
+  ; `bifocals/depth-height`, and then adjust the sketch size accordingly.
+  :size [640 480])
 
 ;; when bifocals changes
 (defn on-bifocals-skeletons-change [the-key the-ref old-skeletons new-skeletons]
@@ -322,14 +452,24 @@
       (if (some #{keyword-uid} new-keyword-uids)
         (do
           (when-not (contains? @uid-inst keyword-uid)
-            (let [inst-id (if (odd? num-new-keyword-uids) :a :b)]
+            (let [inst-keyword (if (odd? num-new-keyword-uids) :d :d)
+                  inst-fn (:inst (inst-keyword inst-map))
+                  inst-id (inst-fn)]
               (swap! uid-inst assoc keyword-uid
-                      [inst-id (if (= :a inst-id) (inst-a) (inst-b))])))
+                      [inst-keyword inst-id])))
           (let [skeleton-hist (keyword-uid new-keyword-uid-skeleton-hists)
-                v (keyword-uid @uid-inst)]
-            (if (= :a (first v))
-              (ctl-a (second v) skeleton-hist num-new-keyword-uids)
-              (ctl-b (second v) skeleton-hist num-new-keyword-uids))))
+                v (keyword-uid @uid-inst)
+                k (first v)
+                inst-id (second v)]
+            (if (= :a k)
+              (ctl-a inst-id skeleton-hist num-new-keyword-uids)
+              (if (= :b k)
+                (ctl-b inst-id skeleton-hist num-new-keyword-uids)
+                (if (= :c k)
+                  (ctl-c inst-id skeleton-hist num-new-keyword-uids)
+                  (if (= :d k)
+                    (ctl-d inst-id skeleton-hist num-new-keyword-uids)
+                    (ctl-e inst-id skeleton-hist num-new-keyword-uids)))))))
         (let [v (keyword-uid @uid-inst)]
           (when-not (nil? v)
             (overtone/kill (second v))
@@ -337,3 +477,11 @@
 
 (add-watch keyword-skeletons-hist
            :keyword-skeletons-hist-watcher on-keyword-skeletons-hist-change)
+
+(defn reset []
+  (overtone/stop)
+  (reset! uid-inst {}))
+
+(reset)
+
+@uid-inst
