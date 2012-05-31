@@ -1,24 +1,28 @@
 # openni-overtone
 
-Demo of OpenNI with Overtone. Doesn't sound great, but it gets you started.
+Demo of OpenNI with Overtone, designed for a modern dance performance.
+
+## Requirements
+
+* Kinect
+* (Optional) TouchOSC and an open WiFi network
 
 ## Usage
 
 * Setup the Kinect. Follow the instructions for SimpleOpenNI (http://code.google.com/p/simple-openni/wiki/Installation). 
-* Test it (http://code.google.com/p/simple-openni/) using Processing.
-* Install Leiningen 2 (https://github.com/technomancy/leiningen/wiki/Upgrading). I am using Leiningen 2 for OpenGL support in quil.
+* Test it (http://code.google.com/p/simple-openni/) using Processing. If this fails, test OpenNI and NITE without Processing.
+* Install Leiningen 2 (https://github.com/technomancy/leiningen/wiki/Upgrading). I am using Leiningen 2 for OpenGL support in quil (replace lein with lein2 below if necessary).
 * Clone this project
 * cd openni-overtone
-* lein2 deps
+* lein deps
+* Stick the SimpleOpenNI JNI's into openni-overtone/native in the right location for your OS.
 * connect the Kinect
-* lein2 run -m openni-overtone.core
+* lein run -m openni-overtone.core
 
-You will probably have problems with JNIs on the classpath. You may need to fix your LD_LIBRARY_PATH (Linux) or DYLIB_LIBRARY_PATH (Mac).
+You probably want to setup Emacs for overtone, see (https://github.com/overtone/overtone/wiki/Overtone-in-Emacs). For lein2, instead of lein plugins, edit ~/.lein/project.clj as in (https://github.com/technomancy/leiningen/wiki/Upgrading).
 
-You probably want to setup Emacs for overtone, see (https://github.com/overtone/overtone/wiki/Overtone-in-Emacs). However, for Leiningen 2, you want to run lein2 rather than lein. You can also just edit ~/.lein/project.clj as in (https://github.com/technomancy/leiningen/wiki/Upgrading).
+Without TouchOSC, you will have to control things by editing core.clj. TouchOSC adds control of instrument volumes and the ability to take snapshots. To run TouchOSC, see the commands commented out at the end of core.clj.
 
 ## License
 
 Copyright (C) 2012 Charles Dietrich.
-
-EPL
