@@ -248,61 +248,63 @@
 (add-watch bifocals/skeletons
            :update-keyword-skeletons-hist update-keyword-skeletons-hist)
 
-(def master-vol (atom 1))
+(def master-vol-default 1)
 
 (def ctl-joints [:head :left-hand :right-hand :left-foot :right-foot])
 
 (def ctls (cons :quadrant ctl-joints))
 
-(def osc-inst-toggles (atom {}))
-(def osc-inst-vols (atom {}))
+(def osc-inst-toggle-defaults
+  (assoc (into {} (for [ctl ctl-joints] [ctl 1])) :quadrant 0))
 
-;; default values
-
-(swap! osc-inst-toggles assoc :quadrant 0)
-(doseq [ctl ctl-joints]
-  (swap! osc-inst-toggles assoc ctl 1))
-
-(swap! osc-inst-vols assoc :quadrant 0.0)
-
-(swap! osc-inst-vols assoc :head 0.15)
-(swap! osc-inst-vols assoc :left-foot 0.3)
-(swap! osc-inst-vols assoc :right-foot 0.3)
-(swap! osc-inst-vols assoc :left-hand 0.12)
-(swap! osc-inst-vols assoc :right-hand 0.12)
+(def osc-inst-vol-defaults {:quadrant 0.0,
+                             :head 0.15,
+                             :left-foot 0.3,
+                             :right-foot 0.3,
+                             :left-hand 0.12,
+                             :right-hand 0.12})
 
 (def quadrants [:upstage-right :downstage-right :upstage-left :downstage-left])
 
-(def osc-quadrant-toggles (atom {}))
-(def osc-quadrant-vols (atom {}))
+(def osc-quadrant-toggle-defaults
+  (into {} (for [q quadrants] [q 1])))
+(def osc-quadrant-vol-defaults
+  (assoc (into {} (for [q quadrants] [q 0.7])) :upstage-right 1))
 
-;; quadrant defaults
-(doseq [q quadrants]
-  (swap! osc-quadrant-toggles assoc q 1)
-  (swap! osc-quadrant-vols assoc q 0.7))
+(def master-vol (atom master-vol-default))
 
-(swap! osc-quadrant-vols assoc :upstage-right 1)
+(def osc-inst-toggles (atom osc-inst-toggle-defaults))
 
-(defn set-touchosc-defaults [client]
-  (overtone/osc-send client (str "/1/master-vol" @master-vol))
+(def osc-inst-vols (atom osc-inst-vol-defaults))
 
-  (overtone/osc-send
-   client
-   (str "/1/osc-inst-toggles" (reduce (fn [k] (k @osc-inst-toggles)) ctls)))
+(def osc-quadrant-toggles (atom osc-quadrant-toggle-defaults))
 
-  (overtone/osc-send
-   client
-   (str "/1/osc-inst-vols" (reduce (fn [k] (k @osc-inst-vols)) ctls)))
+(def osc-quadrant-vols (atom osc-quadrant-vol-defaults))
 
-  (overtone/osc-send
-   client
-   (str "/1/osc-quadrant-toggles"
-        (reduce (fn [k] (k @osc-quadrant-toggles)) quadrants)))
+(defn set-touchosc-defaults [c]
+  (overtone/osc-send c "/1/master-vol" master-vol-default)
 
-  (overtone/osc-send
-   client
-   (str "/1/osc-quadrant-vols"
-        (reduce (fn [k] (k @osc-quadrant-vols)) quadrants))))
+  (apply
+   overtone/osc-send
+   (cons c
+         (cons "/1/osc-inst-toggles"
+               (map (fn [k] (k osc-inst-toggle-defaults)) ctls))))
+
+  (apply
+   overtone/osc-send
+   (cons c
+         (cons "/1/osc-inst-vols"
+               (map (fn [k] (k @osc-inst-vol-defaults)) ctls))))
+
+  (apply
+   overtone/osc-send
+   (cons c (cons "/1/osc-quadrant-toggles"
+                 (map (fn [k] (k @osc-quadrant-toggle-defaults)) quadrants))))
+
+  (apply
+   overtone/osc-send
+   (cons c (cons "/1/osc-quadrant-vols"
+                 (map (fn [k] (k @osc-quadrant-vol-defaults)) quadrants)))))
 
 (def freq-range {:head [100 300],
                  :left-hand [100 400],
@@ -323,7 +325,7 @@
         keyword-uid-skeleton-hists
         (skeleton-pivot keyword-uids keyword-skeletons-hist)]
     (doseq [[keyword-uid insts] @keyword-uid-insts]
-      (if (contains? keyword-uids keyword-uid)
+      (if (contains? (set keyword-uids) keyword-uid)
         (let [skel-hist (keyword-uid keyword-uid-skeleton-hists)]
           (if (ready skel-hist 1)
             (let [quadrant-state
@@ -407,10 +409,11 @@
    (swap! phrases cons @keyword-skeletons-hist)))
 
 ;; setup osc (manual)
-;; set default values in TouchOSC
-;; (def client (osc-client "foo" 9000))
-;; (set-touchosc-defaults client)
-;; tell TouchOSC to send to this server.
+;; change as needed
+;;(def client (overtone/osc-client "192.168.1.10" 9000))
+;;(set-touchosc-defaults client)
 ;; Follow instructions in (https://github.com/overtone/overtone/wiki/TouchOSC).
 ;; (overtone/zero-conf-on)
 ;; (overtone/zero-conf-off)
+;; set default values in TouchOSC
+;; tell TouchOSC to send to this server.
