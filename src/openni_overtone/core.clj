@@ -17,7 +17,7 @@
 ;; buffer size of keyword-skeletons-hist
 ;; Instruments should use (take n @keyword-skeletons-hist)
 ;; for speed in calculating derivatives
-(def hist-size 100)
+(def hist-size 10)
 
 ;; save some phrases for playback or analysis
 (def phrases (atom []))
@@ -202,6 +202,26 @@
    freq 60]
   (* vol (overtone/lf-tri [freq (* freq 2) (* freq 3)])))
 
+(overtone/definst inst-sin-major-third
+  [freq 440
+   vol 0]
+  (* vol (overtone/sin-osc [freq (* freq (/ 5 4))])))
+
+(overtone/definst inst-sin-fourth
+  [freq 440
+   vol 0]
+  (* vol (overtone/sin-osc [freq (* freq (/ 4 3))])))
+
+(overtone/definst inst-sin-fifth
+  [freq 440
+   vol 0]
+  (* vol (overtone/sin-osc [freq (* freq (/ 4 3))])))
+
+(overtone/definst inst-pulse-fifth
+  [freq 440
+   vol 0]
+  (* vol (overtone/pulse [freq (* freq (/ 3 2))])))
+
 (overtone/definst inst-sin-osc
   [freq 440
    vol 0]
@@ -231,10 +251,10 @@
                      :upstage-left (inst-triple-tri),
                      :downstage-left (inst-sin-osc),
                      :head (inst-sin-osc),
-                     :left-hand (inst-square),
-                     :right-hand (inst-square),
-                     :left-foot (inst-saw),
-                     :right-foot (inst-saw)}]
+                     :left-hand (inst-sin-major-third),
+                     :right-hand (inst-pulse-fifth),
+                     :left-foot (inst-sin-fourth),
+                     :right-foot (inst-sin-fifth)}]
           (swap! keyword-uid-insts assoc keyword-uid insts)
           (overtone/ctl (:upstage-right insts) :freq 30)
           (overtone/ctl (:downstage-right insts) :freq 440)
@@ -258,11 +278,26 @@
   (assoc (into {} (for [ctl ctl-joints] [ctl 1])) :quadrant 0))
 
 (def osc-inst-vol-defaults {:quadrant 0.0,
-                             :head 0.15,
-                             :left-foot 0.3,
-                             :right-foot 0.3,
-                             :left-hand 0.12,
-                             :right-hand 0.12})
+                                :head 0.15,
+                                :left-foot 0.3,
+                                :right-foot 0.4,
+                                :left-hand 0.12,
+                                :right-hand 0.03})
+
+(def osc-inst-vol-arm-defaults {:quadrant 0.0,
+                            :head 0.0,
+                             :left-foot 0.0,
+                             :right-foot 0.0,
+                             :left-hand 0.75,
+                            :right-hand 0.25})
+
+(def osc-inst-vol-leg-defaults {:quadrant 0.0,
+                            :head 0.0,
+                             :left-foot 0.5,
+                             :right-foot 0.5,
+                             :left-hand 0.0,
+                             :right-hand 0.0})
+
 
 (def quadrants [:upstage-right :downstage-right :upstage-left :downstage-left])
 
@@ -306,66 +341,103 @@
    (cons c (cons "/1/osc-quadrant-vols"
                  (map (fn [k] (k @osc-quadrant-vol-defaults)) quadrants)))))
 
-(def freq-range {:head [100 300],
-                 :left-hand [100 400],
-                 :right-hand [100 400],
-                 :left-foot [30 300],
-                 :right-foot [30 300]})
+(def hands (set [:left-hand :right-hand]))
+
+(def freq-range {:head [60 250],
+                 :left-foot [120 240],
+                 :right-foot [30 120]})
+
+(def note-chords {:left-hand [48 52 55 60], ; C E G B
+                  :right-hand [53 57 60 64], ; F A C E
+                  })
 
 (def quadrant-defaults
   (into {} (for [q quadrants] [q 0])))
 
+(def ctl-counter (atom 0))
+
+(def ctl-mod 10)
+
 (defn ctl-sound
   [the-key the-ref
    old-keyword-skeletons-hist new-keyword-skeletons-hist]
-  (let [n 10
-        keyword-skeletons-hist (take n new-keyword-skeletons-hist)
-        keyword-uids (skeleton-keys keyword-skeletons-hist)
-        num-uids (count keyword-uids)
-        keyword-uid-skeleton-hists
-        (skeleton-pivot keyword-uids keyword-skeletons-hist)]
-    (doseq [[keyword-uid insts] @keyword-uid-insts]
-      (if (contains? (set keyword-uids) keyword-uid)
-        (let [skel-hist (keyword-uid keyword-uid-skeleton-hists)]
-          (if (ready skel-hist 1)
-            (let [quadrant-state
-                  (assoc quadrant-defaults
-                    (quadrant (:neck (first skel-hist))) 1)]
-            (doseq
-                [q quadrants]
-              (overtone/ctl
-               (q insts)
-               :vol
-               (/ (* @master-vol
-                     (:quadrant @osc-inst-toggles) (:quadrant @osc-inst-vols)
-                     (q @osc-quadrant-toggles) (q @osc-quadrant-vols)
-                     (q quadrant-state)) num-uids)))))
-          (if (ready skel-hist n)
-            (doseq [joint ctl-joints]
-              (overtone/ctl
-               (joint insts)
-               :freq
-               (overtone/scale-range
-                (/ (:sum (:y (joint (skeleton-range skel-hist)))) n)
-                -1000 500
-                (first (joint freq-range))
-                (second (joint freq-range)))
-               :vol
-               (overtone/scale-range
-                (math/abs
-                 (/ (:sum (:x (joint
-                               (skeleton-range (velocity skel-hist))))) n))
-                0 (* 0.01 (stage-size :x))
-                0 (/ (* @master-vol
-                        (joint @osc-inst-toggles)
-                        (joint @osc-inst-vols)) num-uids))))))
-        (doseq
-            [[keyword-uid inst] insts]
-          (overtone/ctl inst :vol 0))))))
+    (let [n 10
+          keyword-skeletons-hist (take n new-keyword-skeletons-hist)
+          keyword-uids (skeleton-keys keyword-skeletons-hist)
+          set-keyword-uids (set keyword-uids)
+          num-uids (count keyword-uids)
+          keyword-uid-skeleton-hists
+          (skeleton-pivot keyword-uids keyword-skeletons-hist)]
+      (doseq [[keyword-uid insts] @keyword-uid-insts]
+        (if (contains? set-keyword-uids keyword-uid)
+          (let [skel-hist (keyword-uid keyword-uid-skeleton-hists)]
+            (if (ready skel-hist 1)
+              (let [quadrant-state
+                    (assoc quadrant-defaults
+                      (quadrant (:neck (first skel-hist))) 1)]
+                (doseq
+                    [q quadrants]
+                  (overtone/ctl
+                   (q insts)
+                   :vol
+                   (/ (* @master-vol
+                         (:quadrant @osc-inst-toggles) (:quadrant @osc-inst-vols)
+                         (q @osc-quadrant-toggles) (q @osc-quadrant-vols)
+                         (q quadrant-state)) num-uids)))))
+            (if (ready skel-hist n)
+              (doseq [joint ctl-joints]
+                (if (contains? hands joint)
+                      (if (= 0 (mod @ctl-counter ctl-mod))
+                        (overtone/ctl
+                         (joint insts)
+                         :freq
+                         (let [chord
+                               (joint note-chords)
+                               index
+                               (int (overtone/scale-range
+                                     (/ (:sum (:y (joint (skeleton-range skel-hist)))) n)
+                                     -500 500
+                                     0 (- (count chord) 1)))
+                               midi-note
+                               (nth chord index)
+                               f
+                               (overtone/midi->hz midi-note)]
+                           f)
+                         :vol
+                         (overtone/scale-range
+                          (math/abs
+                           (/ (:sum (:x (joint
+                                         (skeleton-range (velocity skel-hist))))) n))
+                          0 (* 0.01 (stage-size :x))
+                          0 (/ (* @master-vol
+                                  (joint @osc-inst-toggles)
+                                  (joint @osc-inst-vols)) num-uids))))
+                      (overtone/ctl
+                 (joint insts)
+                 :freq
+                 (overtone/scale-range
+                  (/ (:sum (:y (joint (skeleton-range skel-hist)))) n)
+                  -1000 500
+                  (first (joint freq-range))
+                  (second (joint freq-range)))
+                 :vol
+                 (overtone/scale-range
+                  (math/abs
+                   (/ (:sum (:x (joint
+                                 (skeleton-range (velocity skel-hist))))) n))
+                  0 (* 0.01 (stage-size :x))
+                  0 (/ (* @master-vol
+                          (joint @osc-inst-toggles)
+                          (joint @osc-inst-vols)) num-uids)))))))
+          (doseq
+              [[keyword-uid inst] insts]
+            (overtone/ctl inst :vol 0)))))
+  (swap! ctl-counter inc))
 
 (add-watch keyword-skeletons-hist
            :keyword-skeletons-hist-watcher ctl-sound)
 
+(overtone/stop)
 (def server (overtone/osc-server 44100 "openni-overtone"))
 
 (overtone/osc-handle
