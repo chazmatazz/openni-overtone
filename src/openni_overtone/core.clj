@@ -30,34 +30,19 @@
 
 (def hist-size 10)
 
-;; skeletons vector
-;; each entry in the vector is a map from uid to skeleton
-(def keyword-skeletons-hist (atom []))
+;; skeletons map
+;; each entry in the map is a uid to skeleton-hist circular buffer
+(def skeletons-hist (atom {}))
 
-;; is there a skeleton-hist of at least n
-(defn ready [skeleton-hist n]
+;; is the skeleton hist ready
+(defn ready [skeleton-hist]
   (and
-   (>= (count skeleton-hist) n)
+   (= (count skeleton-hist) hist-size)
    (not (reduce (fn [acc v] (or acc v)) false (map nil? skeleton-hist)))))
 
 ;; convert uids to keywords
 (defn keywordize [skeletons]
   (into {} (for [[k v] (seq skeletons)] [(keyword (str k)) v])))
-
-;; helper function
-;; given a skeletons-hist vector, extract the keys
-;; from each item in the vector, e.g. the keyword-uids
-(defn skeleton-keys [s-hist]
-  (keys (apply merge s-hist)))
-
-;; convert a map indexed by index
-;; to a map indexed by keyword-uid
-(defn skeleton-pivot [keyword-uids keyword-skels-hist]
-    (into {}
-          (for [keyword-uid keyword-uids]
-            [keyword-uid
-             (into [] (for [keyword-skels keyword-skels-hist]
-                        (get keyword-skels keyword-uid nil)))])))
 
 ;; ------------------------
 ;; skeleton history helpers
@@ -130,6 +115,8 @@
   [p1 p2]
   (quil/line (:x p1) (:y p1) (:x p2) (:y p2)))
 
+(def frame-count (atom 0))
+
 (defn draw []
   (quil/background 0)
   ;; You must call this in the draw function. Otherwise, your depth image will be
@@ -138,19 +125,19 @@
   (quil/image (bifocals/depth-image) 0 0)
   (quil/stroke-weight 3)
   (quil/stroke 255 0 180)
-  (let [ksh (take 1 @keyword-skeletons-hist)
-        skeletons-uid-hist
-        (skeleton-pivot
-         (skeleton-keys ksh) ksh)]
-    (doseq [[keyword-uid skel-hist] skeletons-uid-hist]
-      (when (ready skel-hist 1)
-        (doseq [skel skel-hist]
-          (let [project-skeleton
-                (bifocals/project-skeleton skel)]
-            (doseq [joint-pair joint-pairs]
-              (draw-line
-               ((first joint-pair) project-skeleton)
-               ((second joint-pair) project-skeleton)))))))))
+  (doseq [[keyword-uid skeleton-hist] @skeletons-hist]
+    (let [i (mod (- @frame-count 1) hist-size)
+          skel (if (> (count skeleton-hist) i)
+                 (nth skeleton-hist i)
+                 nil)]
+      (when-not (nil? skel)
+        (let [project-skeleton
+              (bifocals/project-skeleton skel)]
+          (doseq [joint-pair joint-pairs]
+            (draw-line
+             ((first joint-pair) project-skeleton)
+             ((second joint-pair) project-skeleton)))))))
+  (swap! frame-count inc))
 
 (quil/defsketch kinect
   :title "Unfolding Perception"
@@ -165,7 +152,7 @@
 ;; instrument definitions
 ;; ----------------------
 
-;; the ratios aren't working with definst in Overtone 0.6.0
+;; the defratios aren't working with definst in Overtone 0.6.0
 
 (overtone/definst inst-sin-third
   [freq 440
@@ -190,10 +177,10 @@
 ;; uid-insts
 (def keyword-uid-insts (atom {}))
 
-;; when bifocals changes
-(defn update-keyword-skeletons-hist [the-key the-ref old-skeletons new-skeletons]
-  (let [keyword-uid-skeletons (keywordize new-skeletons)]
-    ;; add new instruments and configure constant params
+;; when quil/frame-count changes
+(defn update-skeletons-hist [the-key the-ref old-frame-count new-frame-count]
+    (let [keyword-uid-skeletons (keywordize @bifocals/skeletons)]
+    ;; add new instruments
     (doseq [keyword-uid (keys keyword-uid-skeletons)]
       (when (not (contains? @keyword-uid-insts keyword-uid))
         (let [insts {:head (inst-sin-osc),
@@ -203,11 +190,20 @@
                      :right-foot (inst-sin-fourth)}]
           (swap! keyword-uid-insts assoc keyword-uid insts))))
     ;; add to skeletons history
-    (swap! keyword-skeletons-hist
-           (fn [ksh] (cons keyword-uid-skeletons (take (- hist-size 1) ksh))))))
+    (swap!
+     skeletons-hist
+     (fn [s-h]
+       (into {} (for [[keyword-uid skel] keyword-uid-skeletons]
+                  [keyword-uid
+                   (into [] (for [i (range hist-size)]
+                              (if (= i (mod old-frame-count hist-size))
+                                skel
+                                (if (< (count (keyword-uid s-h)) i)
+                                  nil
+                                  (nth (keyword-uid s-h) i)))))]))))))
 
-(add-watch bifocals/skeletons
-           :update-keyword-skeletons-hist update-keyword-skeletons-hist)
+(add-watch frame-count
+           :update-skeletons-hist update-skeletons-hist)
 
 (def master-vol 1)
 
@@ -235,10 +231,10 @@
       (into {} (for [[k v] inst-vol-map] [k (/ (* (k itv) v) s)])))))
 
 (def joint-y-stage-range {:head [-1000 500],
-                          :left-hand [-500 500],
-                          :right-hand [-500 500],
-                          :left-foot [-1000 500],
-                          :right-foot [-1000 500]})
+                    :left-hand [-500 500],
+                    :right-hand [-500 500],
+                    :left-foot [-1000 500],
+                    :right-foot [-1000 500]})
 
 (def velocity-frac 0.01)
 
@@ -260,65 +256,58 @@
 
 (defn ctl-sound
   [the-key the-ref
-   old-keyword-skeletons-hist new-keyword-skeletons-hist]
-  (let [keyword-skeletons-hist new-keyword-skeletons-hist
-        keyword-uids (skeleton-keys keyword-skeletons-hist)
+   old-skeleton-hists new-skeleton-hists]
+  (let [keyword-uids (keys new-skeleton-hists)
         set-keyword-uids (set keyword-uids)
-        num-uids (count keyword-uids)
-        keyword-uid-skeleton-hists
-        (skeleton-pivot keyword-uids keyword-skeletons-hist)
-        max-velocity-x (* velocity-frac (:x stage-size))]
+        num-uids (count keyword-uids)]
     (doseq [[keyword-uid insts] @keyword-uid-insts]
       (if (contains? set-keyword-uids keyword-uid)
-        (let [skel-hist (keyword-uid keyword-uid-skeleton-hists)]
-          (if (ready skel-hist hist-size)
+        (let [skel-hist (keyword-uid new-skeleton-hists)]
+          (if (ready skel-hist)
             (doseq [joint ctl-joints]
               (let [inst-id (joint insts)
-                    inst-vols (get-inst-vols @ctl-type)
-                    max-vol (/ (* master-vol (joint inst-vols)) num-uids)]
-                (if (= max-vol 0)
+                    joint-vol (joint (get-inst-vols @ctl-type))]
+                (if (= 0 joint-vol)
                   (overtone/ctl inst-id :vol 0)
-                  (let [joint-min-y (first (joint joint-y-stage-range))
-                        joint-max-y (second (joint joint-y-stage-range))
+                  (let [y-stage-range (joint joint-y-stage-range)
+                        min-y (first y-stage-range)
+                        max-y (second y-stage-range)
                         avg-y (/ (:sum (:y (joint (skeleton-range skel-hist)))) hist-size)
-                        abs-avg-vel-x
-                        (math/abs
-                         (/ (:sum
-                             (:x (joint
-                                  (skeleton-range (velocity skel-hist))))) hist-size))
-                        vol (overtone/scale-range
-                             abs-avg-vel-x
-                             0 max-velocity-x
-                             0 max-vol)]
-                  (if (contains? (set hands) joint)
-                    (let [chord (joint joint-chords)
-                          max-chord-idx (- (count chord) 1)]
-                      (overtone/ctl
-                       inst-id
-                       :freq
-                       (overtone/midi->hz
-                        (overtone/note
-                         (nth chord (int (overtone/scale-range
-                                          avg-y
-                                          joint-min-y joint-max-y
-                                          0 max-chord-idx)))))
-                       :vol vol))
+                        freq
+                        (if (contains? (set hands) joint)
+                          (let [chord (joint joint-chords)]
+                            (overtone/midi->hz
+                             (overtone/note
+                              (nth chord
+                                   (int (overtone/scale-range
+                                         avg-y
+                                         min-y
+                                         max-y
+                                         0
+                                         (- (count chord) 1)))))))
+                          (let [freq-range (joint joint-freq-range)]
+                            (overtone/scale-range
+                             avg-y
+                             min-y
+                             max-y
+                             (first freq-range)
+                             (second freq-range))))]
                     (overtone/ctl
                      inst-id
                      :freq
+                     freq
+                     :vol
                      (overtone/scale-range
-                      avg-y
-                      joint-min-y
-                      joint-max-y
-                      (first (joint joint-freq-range))
-                      (second (joint joint-freq-range)))
-                     :vol vol))))))))
-        (doseq
-            [[keyword-uid inst] insts]
-          (overtone/ctl inst :vol 0))))))
+                      (math/abs
+                       (:max
+                           (:y (joint
+                                (skeleton-range (velocity skel-hist))))))
+                      0 (* velocity-frac (:x stage-size) hist-size)
+                      0 (/ (* master-vol joint-vol) num-uids)))))))))
+        (doseq [[keyword-uid inst] insts] (overtone/ctl inst :vol 0)) ))))
 
-(add-watch keyword-skeletons-hist
-           :keyword-skeletons-hist-watcher ctl-sound)
+(add-watch skeletons-hist
+           :skeletons-hist-watcher ctl-sound)
 
 ;; for hacking
 ;; (reset-insts)
@@ -326,3 +315,4 @@
 ;; during performance
 ;; (reset! ctl-type :hands)
 ;; (reset! ctl-type :all)
+;; (reset! ctl-type :feet)
