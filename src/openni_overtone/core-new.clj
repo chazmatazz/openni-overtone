@@ -28,7 +28,7 @@
         (for [axis [:x :y :z]]
           [axis (- (axis (:max stage)) (axis (:min stage)))])))
 
-(def hist-size 6)
+(def hist-size 60)
 
 ;; skeletons map
 ;; each entry in the map is a uid to skeleton-hist circular buffer
@@ -84,12 +84,14 @@
 (defn velocity [skeleton-hist]
   (skeleton-derivative skeleton-hist))
 
+(def fps 30)
+
 (defn setup []
   (quil/smooth)
   ;; This function connects to the kinect. You must call it first. Otherwise,
   ;; there will be NPEs.
   (bifocals/setup)
-  (quil/frame-rate 30))
+  (quil/frame-rate fps))
 
 (defn draw-line
   [p1 p2]
@@ -143,7 +145,9 @@
 (def keyword-uid-insts (atom {}))
 
 ;; control volume in sound booth
-(def master-vol 10)
+(def master-vol 1)
+
+(def fudge 10)
 
 (def inst-toggles-feet (merge (into {} (for [joint (cons :head hands)] [joint 0]))
                               (into {} (for [joint feet] [joint 1]))))
@@ -174,7 +178,7 @@
                     :left-foot [-1000 500],
                     :right-foot [-1000 500]})
 
-(def velocity-frac 0.5)
+(def velocity-frac 0.1)
 
 (def joint-freq-range {:head [60 250],
                        :left-foot [120 240],
@@ -186,6 +190,8 @@
 ;; for changes during performance
 ;; one of [:feet, :hands, :all]
 (def ctl-type (atom :feet))
+
+(def ctl-hands-every 10)
 
 ;; reset the insts whilst hacking on code
 (defn reset-insts []
@@ -251,64 +257,80 @@
           keyword-uids (keys new-skeletons-hist)
           set-keyword-uids (set keyword-uids)
           num-uids (count keyword-uids)]
-      (doseq [[keyword-uid insts] @keyword-uid-insts]
-        (if (contains? set-keyword-uids keyword-uid)
-          (let [circular-buffer (keyword-uid new-skeletons-hist)
-                skel-hist (get-skel-hist buf-head circular-buffer)]
-            (if (ready skel-hist)
-              (doseq [joint ctl-joints]
-                (let [inst-id (joint insts)
-                      joint-vol (joint (get-inst-vols @ctl-type))]
-                  (if (= 0 joint-vol)
-                    (overtone/ctl inst-id :vol 0)
-                    (let [y-stage-range (joint joint-y-stage-range)
-                          min-pos-y (first y-stage-range)
-                          max-pos-y (second y-stage-range)
-                          abs-max-pos-y (max (math/abs min-pos-y)
-                                             (math/abs max-pos-y))
-                          pos-vec-y
-                          (into []
-                                (for [skel skel-hist] (:y (joint skel))))
-                          pos-sum-y (apply + pos-vec-y)
-                          f-scale
-                          (partial overtone/scale-range
-                                   pos-sum-y
-                                   (* min-pos-y (count pos-vec-y))
-                                   (* max-pos-y (count pos-vec-y)))
-                          freq
-                          (if (contains? (set hands) joint)
-                            (let [chord (joint joint-chords)]
-                              (overtone/midi->hz
-                               (overtone/note
-                                (nth chord
-                                     (int (f-scale
-                                           0
-                                           (- (count chord) 1)))))))
-                            (let [freq-range (joint joint-freq-range)]
-                              (f-scale
-                               (first freq-range)
-                               (second freq-range))))
-                          abs-max-vel-x
-                          (* velocity-frac (:x stage-size))
-                          vel-vec-x
-                          (into []
+      (let [num-joints (count ctl-joints)
+            time-delta (/ 1000 fps num-joints)]
+        (doseq [[keyword-uid insts] @keyword-uid-insts]
+          (if (contains? set-keyword-uids keyword-uid)
+            (let [circular-buffer (keyword-uid new-skeletons-hist)
+                  skel-hist (get-skel-hist buf-head circular-buffer)]
+              (if (ready skel-hist)
+                (doseq [i (range num-joints)]
+                  (let [joint (nth ctl-joints i)
+                        inst-id (joint insts)
+                        joint-vol (joint (get-inst-vols @ctl-type))]
+                    (if (= 0 joint-vol)
+                      (overtone/ctl inst-id :vol 0)
+                      (let [y-stage-range (joint joint-y-stage-range)
+                            min-pos-y (first y-stage-range)
+                            max-pos-y (second y-stage-range)
+                            abs-max-pos-y (max (math/abs min-pos-y)
+                                               (math/abs max-pos-y))
+                            pos-vec-y
+                            (into []
+                                  (for [skel skel-hist] (:y (joint skel))))
+                            pos-sum-y (apply + pos-vec-y)
+                            f-scale
+                            (partial overtone/scale-range
+                                     pos-sum-y
+                                     (* min-pos-y (count pos-vec-y))
+                                     (* max-pos-y (count pos-vec-y)))
+                            freq
+                            (if (contains? (set hands) joint)
+                              (let [chord (joint joint-chords)]
+                                (overtone/midi->hz
+                                 (overtone/note
+                                  (nth chord
+                                       (int (f-scale
+                                             0
+                                             (- (count chord) 1)))))))
+                              (let [freq-range (joint joint-freq-range)]
+                                (f-scale
+                                 (first freq-range)
+                                 (second freq-range))))
+                            abs-max-vel-x
+                            (* velocity-frac (:x stage-size))
+                            vel-vec-x
+                            (map (fn [vel-x] (overtone/scale-range
+                                             vel-x
+                                             (- 0 abs-max-vel-x) abs-max-vel-x
+                                             (- 0 abs-max-vel-x) abs-max-vel-x))
+                                 (into []
                                 (for [v-skel (velocity skel-hist)]
-                                  (:y (joint v-skel))))
-                          vel-sum-x (apply + vel-vec-x)]
-                      (sixteenth-graph (* (quil/width) 1/2) (* (quil/height) 1/8)
-                             [vel-sum-x] (* abs-max-vel-x (count vel-vec-x)))
-                      (sixteenth-graph (* (quil/width) 3/4) (* (quil/height) 1/8)
-                             vel-vec-x abs-max-vel-x)
-                      (overtone/ctl
-                       inst-id
-                       :freq
-                       freq
-                       :vol
-                       (overtone/scale-range
-                        (math/abs vel-sum-x)
-                        0 (* abs-max-vel-x (count vel-vec-x))
-                        0 (/ (* master-vol joint-vol) num-uids)))))))))
-          (doseq [[keyword-uid inst] insts] (overtone/ctl inst :vol 0))))
+                                  (:y (joint v-skel)))))
+                            vel-sum-x (apply + vel-vec-x)]
+                        (quil/stroke-weight 1)
+                        (sixteenth-graph (+ i (* (quil/width) 1/2))
+                                         (* (quil/height) 1/8)
+                                         [vel-sum-x]
+                                         (* abs-max-vel-x (count vel-vec-x)))
+                        (sixteenth-graph (+ i (* (quil/width) 3/4))
+                                         (* (quil/height) 1/8)
+                                         vel-vec-x
+                                         abs-max-vel-x)
+                        (when (or (not (contains? (set hands) joint))
+                                  (= 0 (mod new-frame-count ctl-hands-every)))
+                          (overtone/at
+                           (+ (overtone/now) (* i time-delta))
+                           (overtone/ctl
+                            inst-id
+                            :freq
+                            freq
+                            :vol
+                            (overtone/scale-range
+                             (math/abs vel-sum-x)
+                             0 (* abs-max-vel-x (count vel-vec-x))
+                             0 (/ (* fudge master-vol joint-vol) num-uids)))))))))))
+            (doseq [[keyword-uid inst] insts] (overtone/ctl inst :vol 0)))))
       (reset! skeletons-hist new-skeletons-hist))))
 
 (add-watch frame-count :on-frame on-frame)
@@ -316,10 +338,10 @@
 ;; for instrument hacking
 ;; (reset-insts)
 
-;; for debugging
-(reset! screen-mode :debug)
-
 ;; initial state: (= @screen-mode :off), (= @ctl-type :feet)
+
+;; for debugging
+;; (reset! screen-mode :debug)
 
 ;; display during performance
 ;; (reset! screen-mode :performance)
@@ -328,3 +350,6 @@
 ;; (reset! ctl-type :hands)
 ;; (reset! ctl-type :all)
 ;; (reset! ctl-type :feet)
+
+;; @screen-mode
+;; @ctl-type
