@@ -308,11 +308,11 @@
 (def osc-quadrant-vol-defaults
   (assoc (into {} (for [q quadrants] [q 0.7])) :upstage-right 1))
 
-(def master-vol (atom 0))
+(def master-vol (atom 3))
 
 (def osc-inst-toggles (atom osc-inst-toggle-defaults))
 
-(def osc-inst-vols (atom osc-inst-vol-defaults))
+(def osc-inst-vols (atom osc-inst-vol-arm-defaults))
 
 (def osc-quadrant-toggles (atom osc-quadrant-toggle-defaults))
 
